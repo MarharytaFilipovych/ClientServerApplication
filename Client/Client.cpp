@@ -1,20 +1,48 @@
-// Client.cpp : This file contains the 'main' function. Program execution begins and ends there.
-//
-
 #include <iostream>
+#include <WinSock2.h>
+using namespace std;
+#include <Ws2tcpip.h>
+
+#pragma comment(lib, "ws2_32.lib")
 
 int main()
 {
-    std::cout << "Hello World!\n";
+	WSADATA wsaData;
+	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0){
+		cerr << "WSAStartup failed" << endl;
+		return 1;
+	}
+	int port = 12345;
+	PCWSTR serverIp =  L"127.0.0.1";
+	SOCKET clientSocket = socket(AF_INET, SOCK_STREAM, 0);
+	if (clientSocket == INVALID_SOCKET){
+		cerr << "Error creating socket: " << WSAGetLastError() << endl;
+		WSACleanup();
+		return 1;
+	}
+	sockaddr_in serverAddr;
+	serverAddr.sin_family = AF_INET;
+	serverAddr.sin_port = htons(port);
+	InetPton(AF_INET, serverIp, &serverAddr.sin_addr);
+	if (connect(clientSocket, reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr)) == SOCKET_ERROR) {
+		cerr << "Connect failed with error: " << WSAGetLastError() << endl;
+		closesocket(clientSocket);
+		WSACleanup();
+		return 1;
+	}
+
+	const char* message = "Hello, server! How are you?";
+	send(clientSocket, message, (int)strlen(message), 0);
+
+	char buffer[1024];
+	memset(buffer, 0, 1024);
+	int bytesReceived = recv(clientSocket, buffer, (int)sizeof(buffer), 0);
+	if (bytesReceived > 0)
+	{
+		cout << "Received from server: " << buffer << endl;
+	}
+	closesocket(clientSocket);
+	WSACleanup()
+
 }
 
-// Run program: Ctrl + F5 or Debug > Start Without Debugging menu
-// Debug program: F5 or Debug > Start Debugging menu
-
-// Tips for Getting Started: 
-//   1. Use the Solution Explorer window to add/manage files
-//   2. Use the Team Explorer window to connect to source control
-//   3. Use the Output window to see build output and other messages
-//   4. Use the Error List window to view errors
-//   5. Go to Project > Add New Item to create new code files, or Project > Add Existing Item to add existing code files to the project
-//   6. In the future, to open this project again, go to File > Open > Project and select the .sln file

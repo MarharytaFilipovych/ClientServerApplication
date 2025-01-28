@@ -1,19 +1,56 @@
-// Server.cpp : This file contains the 'main' function. Program execution begins and ends there.
-//
-
 #include <iostream>
+#include <WinSock2.h>
+using namespace std;
 
+#pragma comment(lib, "ws2_32.lib")
 int main()
 {
-    std::cout << "Hello World!\n";
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        cerr << "WSAStartup failed!" << endl;
+        return 1;
+    }
+
+    int port = 12345;
+    SOCKET serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if (serverSocket == INVALID_SOCKET) {
+        cerr << "Error craeting socket: " << WSAGetLastError() << endl;
+        WSACleanup();
+        return 1;
+    }
+
+    sockaddr_in serverAddr;
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_addr.s_addr = INADDR_ANY;
+    serverAddr.sin_port = htons(port);
+
+    if (listen(serverSocket, SOMAXCONN) == SOCKET_ERROR) {
+        cerr << "Listen failed with error: " << WSAGetLastError() <<endl;
+        closesocket(serverSocket);
+        WSACleanup();
+        return 1;
+    }
+    cout << "Server listening on port " << port << endl;
+    SOCKET clientSocket = accept(serverSocket, nullptr, nullptr);
+    if (clientSocket == INVALID_SOCKET) {
+        cerr << "Accept failed with error: " << WSAGetLastError() << endl;
+        closesocket(serverSocket);
+        WSACleanup();
+        return 1;
+    }
+
+    char buffer[1024];
+    memset(buffer, 0, 1024);
+    int bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
+    if (bytesReceived > 0) {
+        cout << "Received data: " << buffer << endl;
+        const char* response = "Hello, client! This is the server.";
+        send(clientSocket, response, (int)strlen(response), 0);
+    }
+
+    closesocket(clientSocket);
+    closesocket(serverSocket);
+    WSACleanup();
+    return 0;
+    
 }
-
-// Run program: Ctrl + F5 or Debug > Start Without Debugging menu
-// Debug program: F5 or Debug > Start Debugging menu
-
-// Tips for Getting Started: 
-//   1. Use the Solution Explorer window to add/manage files
-//   2. Use the Team Explorer window to connect to source control
-//   3. Use the Output window to see build output and other messages
-//   4. Use the Error List window to view errors
-//   5. Go to Project > Add New Item to create new code files, or Project > Add Existing Item to add existing code files to the project
