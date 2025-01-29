@@ -2,8 +2,43 @@
 #include <WinSock2.h>
 using namespace std;
 #include <Ws2tcpip.h>
+#include <fstream>
+#include <sstream>
 
 #pragma comment(lib, "ws2_32.lib")
+
+class Commands {
+
+	SOCKET clientSocket;
+
+	
+public:
+	Commands(const SOCKET& socket) :clientSocket(socket) {}
+
+	void get(const string& filename) {
+		const char* message = ("GET "+filename).c_str();
+		send(clientSocket, message, (int)strlen(message), 0);
+		char buffer[1024];
+		memset(buffer, 0, 1024);
+		int bytesReceived = recv(clientSocket, buffer, (int)sizeof(buffer), 0);
+		if (bytesReceived < 0)return;
+		if (string(buffer) == "I am unable to open your file!") {
+			cout << "Received from server: " << buffer << endl;
+			return;
+		}
+		ofstream file(filename, ios::binary);
+		int i = 0;
+		while (i != atoi(buffer)) {
+			memset(buffer, 0, 1024);
+			bytesReceived = recv(clientSocket, buffer, (int)sizeof(buffer), 0);
+			file.write(buffer, bytesReceived);
+			i += bytesReceived;
+		}
+		file.close();
+		cout << "File transfer completed!" << endl;
+
+	}
+};
 
 int main()
 {
@@ -42,7 +77,7 @@ int main()
 		cout << "Received from server: " << buffer << endl;
 	}
 	closesocket(clientSocket);
-	WSACleanup()
+	WSACleanup();
 
 }
 
