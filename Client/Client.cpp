@@ -31,7 +31,6 @@ class Client {
 		ofstream file(filename, ios::binary);
 		int i = 0;
 		int fileSize = atoi(buffer);
-		cout << "Server: size of file is " << buffer << " bytes." << endl;
 		while (i != fileSize) {
 			int bytesReceived = getResponse();
 			file.write(buffer, bytesReceived);
@@ -44,7 +43,7 @@ class Client {
 	void put(const path& filename) {
 		ifstream file(filename, ios::binary);	
 		char bufferForContent[CHUNK_SIZE];
-		while (file.read(bufferForContent, sizeof(buffer))) {
+		while (file.read(bufferForContent, sizeof(bufferForContent))) {
 			send(clientSocket, bufferForContent, (int)(file.gcount()), 0);
 		} 
 		if (file.gcount() > 0)send(clientSocket, bufferForContent, (int)(file.gcount()), 0);

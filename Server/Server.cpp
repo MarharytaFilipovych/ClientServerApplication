@@ -1,13 +1,11 @@
 #include <iostream>
 #include <WinSock2.h>
 #include <fstream>
-#include <vector>
 #include <string>
 #include <sstream>
 #define CHUNK_SIZE 1024
 using namespace std;
 #include <filesystem>
-#include <thread>
 using namespace std::filesystem;
 #pragma comment(lib, "ws2_32.lib")
 const string serverDatabase = ".\\Server database";
@@ -15,7 +13,6 @@ const string serverDatabase = ".\\Server database";
 
 class Server {
     const SOCKET clientSocket;
-
 
     const string getFilePermissions(const path& file)const {
         perms p = status(file).permissions();
@@ -26,7 +23,7 @@ class Server {
         return result;
     }
 
-    void get(const path& fileName) const{
+    void get(const path& fileName) const {
         if (!is_regular_file(fileName)) {
             sendMessage("I am unable to open your file!");
             return;
@@ -34,10 +31,13 @@ class Server {
         ifstream file(fileName, ios::binary);
         sendMessage(to_string(file_size(fileName)).c_str());
         char buffer[CHUNK_SIZE];
-        while (file.read(buffer, sizeof(buffer))) send(clientSocket, buffer, (int)(file.gcount()), 0);       
+        while (file.read(buffer, sizeof(buffer))) {
+            send(clientSocket, buffer, (int)(file.gcount()), 0);
+        }
         if (file.gcount() > 0)send(clientSocket, buffer, (int)(file.gcount()), 0);
         file.close();
     }
+
 
     void list(const path& dir_path)const {
         if (is_directory(dir_path)) {
@@ -107,12 +107,14 @@ class Server {
     bool isInvalidPath(const path& p, const string& command)const {
         return !exists(p) || (command == "LIST" && !is_directory(p)) || (command != "LIST" && !is_regular_file(p));
     }
+
 public:
     char buffer[CHUNK_SIZE];
 
     Server(const SOCKET& socket) :clientSocket(socket) {
         memset(buffer, 0, CHUNK_SIZE);
     }
+
     const int getData() {
         memset(buffer, 0, CHUNK_SIZE);
         return recv(clientSocket, buffer, sizeof(buffer), 0);
@@ -188,16 +190,12 @@ int main()
         server.sendMessage("Hello, client! This is the server.");
     }
     while (true) {
-
         if (server.getData() > 0) {
             cout << "Client: " << server.buffer << endl;
             server.sendResponse();
         }
-
    }
         
-    
-
     closesocket(clientSocket);
     closesocket(serverSocket);
     WSACleanup();
