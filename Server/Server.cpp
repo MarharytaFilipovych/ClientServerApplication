@@ -29,12 +29,13 @@ class Server {
             return;
         }
         ifstream file(fileName, ios::binary);
+
         sendMessage(to_string(file_size(fileName)).c_str());
-        char buffer[CHUNK_SIZE];
-        while (file.read(buffer, sizeof(buffer))) {
-            send(clientSocket, buffer, (int)(file.gcount()), 0);
+        char bufferForData[CHUNK_SIZE];
+        while (file.read(bufferForData, sizeof(bufferForData))) {
+            send(clientSocket, bufferForData, (int)(file.gcount()), 0);
         }
-        if (file.gcount() > 0)send(clientSocket, buffer, (int)(file.gcount()), 0);
+        if (file.gcount() > 0)send(clientSocket, bufferForData, (int)(file.gcount()), 0);
         file.close();
     }
 
