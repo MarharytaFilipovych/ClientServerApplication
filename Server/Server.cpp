@@ -187,12 +187,12 @@ int main()
     Server server(clientSocket);
     
     if (server.getData() > 0) {
-        cout << "Client: " << server.buffer << endl;
+        cout << "\033[95m" << server.buffer << endl;
         server.sendMessage("Hello, client! This is the server.");
     }
     while (true) {
         if (server.getData() > 0) {
-            cout << "Client: " << server.buffer << endl;
+            cout << "\033[95m" << server.buffer <<"\033[94m" <<endl;
             server.sendResponse();
         }
    }

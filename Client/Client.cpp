@@ -24,7 +24,7 @@ class Client {
 	void get(const path& file_path) {
 		if (getResponse() < 0)return;
 		if (string(buffer) == "Request denied.") {
-			cout << "Server: " << buffer << endl;
+			cout << "\033[94m" << buffer << endl;
 			return;
 		}
 		path filename = database / file_path.filename();
@@ -37,7 +37,7 @@ class Client {
 			i += bytesReceived;
 		}
 		file.close();
-		cout << "File received." << endl;		
+		cout << "\033[95mFile received." << endl;		
 	}
 
 	void put(const path& filename) {
@@ -74,7 +74,7 @@ public:
 	}
 
 	void outputServerResponse() {
-		if (getResponse() > 0)cout << "Server: " << buffer << endl;
+		if (getResponse() > 0)cout << "\033[94m" << buffer << "\033[95m"<<endl;
 	}
 
 	void sendMessage(const char* message)const {
@@ -87,7 +87,7 @@ public:
 		if (command == "PUT") {
 			path file = getFileFromInput(command, userInput, command.length() + 1);
 			if (!is_regular_file(file) || !exists(file) || file_size(file) == 0) {
-				cout << "Something wrong with the file!" << endl;
+				cout << "\033[95mSomething wrong with the file!" << endl;
 				return;
 			}
 			sendMessage((userInput + " " + to_string(file_size(file))).c_str());
@@ -149,7 +149,7 @@ int main()
 	getline(cin, user_input);
 	while (true) {
 		if (Validation::isIncorrectRequest(user_input)) {
-			cout << "Undefined request" << endl;
+			cout << "\033[95mUndefined request" << endl;
 			getline(cin, user_input);
 		}
 		else {
