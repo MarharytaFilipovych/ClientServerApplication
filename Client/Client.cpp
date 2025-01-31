@@ -9,8 +9,8 @@ using namespace std::filesystem;
 #include <sstream>
 #include <unordered_set>
 #pragma comment(lib, "ws2_32.lib")
-#include <thread> 
 #include <algorithm>
+const path database = ".\\database";
 
 class Client {
 	char buffer[CHUNK_SIZE];
@@ -21,12 +21,13 @@ class Client {
 		return recv(clientSocket, buffer, sizeof(buffer), 0);
 	}
 
-	void get(const string& filename) {
+	void get(const path& file_path) {
 		if (getResponse() < 0)return;
-		if (buffer == "I am unable to open your file!") {
+		if (string(buffer) == "Request denied.") {
 			cout << "Server: " << buffer << endl;
 			return;
 		}
+		path filename = database / file_path.filename();
 		ofstream file(filename, ios::binary);
 		int i = 0;
 		int fileSize = atoi(buffer);
@@ -37,10 +38,10 @@ class Client {
 			i += bytesReceived;
 		}
 		file.close();
-		
+		cout << "File received." << endl;		
 	}
 
-	void put(const string& filename) {
+	void put(const path& filename) {
 		ifstream file(filename, ios::binary);	
 		char bufferForContent[CHUNK_SIZE];
 		while (file.read(bufferForContent, sizeof(buffer))) {
@@ -51,7 +52,7 @@ class Client {
 		outputServerResponse();
 	}
 
-	string getFileFromInput(string& command, string& input, int index) {
+	path getFileFromInput(string& command, string& input, int index) {
 		string file;
 		int indexEnd =  input.length();
 		if (input[index] == '"' && input[indexEnd - 1] == '"') file = input.substr(index + 1, indexEnd - index - 2);
@@ -59,6 +60,7 @@ class Client {
 		replace(file.begin(), file.end(), '\\', '/');
 		return file;
 	}
+
 	string getCommand(string& input) {
 		string command;
 		stringstream ss(input);
@@ -84,9 +86,9 @@ public:
 	void getResponse(string& userInput) {
 		string command = getCommand(userInput);
 		if (command == "PUT") {
-			string file = getFileFromInput(command, userInput, command.length() + 1);
+			path file = getFileFromInput(command, userInput, command.length() + 1);
 			if (!is_regular_file(file) || !exists(file) || file_size(file) == 0) {
-				cout << "something wrong with the file!" << endl;
+				cout << "Something wrong with the file!" << endl;
 				return;
 			}
 			sendMessage((userInput + " " + to_string(file_size(file))).c_str());
@@ -111,7 +113,7 @@ struct Validation {
 		string command;
 		stringstream ss(input);
 		ss >> command;
-		return commands.find(command) == commands.end();
+		return commands.find(command) == commands.end() || input.length()<=command.length();
 	}
 };
 const unordered_set<string> Validation::commands = { "GET", "LIST", "PUT", "INFO", "DELETE" };

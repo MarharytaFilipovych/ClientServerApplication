@@ -11,14 +11,13 @@ using namespace std;
 using namespace std::filesystem;
 #pragma comment(lib, "ws2_32.lib")
 const string serverDatabase = ".\\Server database";
+
+
 class Server {
     const SOCKET clientSocket;
 
-    bool fileIsNotOkay(const string& file)const {
-        return !exists(file) || !is_regular_file(file);
-    }
 
-    const string getFilePermissions(const string& file)const {
+    const string getFilePermissions(const path& file)const {
         perms p = status(file).permissions();
         string result;
         result += ((p & perms::owner_read) != perms::none ? "r" : "-");
@@ -27,8 +26,8 @@ class Server {
         return result;
     }
 
-    void get(const string& fileName) const{
-        if (fileIsNotOkay(fileName)) {
+    void get(const path& fileName) const{
+        if (!is_regular_file(fileName)) {
             sendMessage("I am unable to open your file!");
             return;
         }
@@ -40,10 +39,10 @@ class Server {
         file.close();
     }
 
-    void list(const string& path)const {
-        if (exists(path) && is_directory(path)) {
+    void list(const path& dir_path)const {
+        if (is_directory(dir_path)) {
             string list;
-            for (const auto& entry : directory_iterator(path)) {
+            for (const auto& entry : directory_iterator(dir_path)) {
                 list.append(entry.path().string() + "\n");
             }
             sendMessage(list.c_str());
@@ -51,10 +50,9 @@ class Server {
         else sendMessage("Looks like this directory doesn't exist!");
     }
 
-    void put(const string& file_path, int size)  {
-        string fileName = path(file_path).filename().string();
-        string fileNameInDatabase = (path(serverDatabase) / fileName).string();
-        ofstream file(fileNameInDatabase, ios::binary | ios::out);
+    void put(const path& file_path, int size)  {
+        path fileName = serverDatabase /file_path.filename();
+        ofstream file(fileName, ios::binary);
         int i = 0;
         while (i != size) {
             int bytesReceived = getData();
@@ -63,12 +61,11 @@ class Server {
         }
         file.close();
         sendMessage("File transfer completed!");
-
     }
 
-    void info(const string& file)const {
-        if (fileIsNotOkay(file)) {
-            sendMessage("The file doesn't exist!");
+    void info(const path& file)const {
+        if (!is_regular_file(file)) {
+            sendMessage("Request denied.");
             return;
         }
         string size = to_string(file_size(file));
@@ -78,26 +75,20 @@ class Server {
         sendMessage(info.c_str());             
     }
 
-    void deleteFile(const string&  file) const {
+    void deleteFile(path&  file) const {
         if(remove(file))sendMessage("Successful removal!");
         else sendMessage("The file doesn't exist!");
     }
 
 
-    string getPath(const string& command, const char* buffer) {
+    path getPath(const string& command) {
         string input(buffer);
-        if (input.length() <= command.length() + 1) return "";
         bool isPut = (command == "PUT");
         int startIndex = command.length() + 1;
         int indexEnd = isPut ? input.rfind(' ') : input.length();
-        if (indexEnd <= startIndex) return "";  
         string file;
-        if (input[startIndex] == '"' && input[indexEnd - 1] == '"') {
-            file = input.substr(startIndex + 1, indexEnd - startIndex - 2);
-        }
-        else {
-            file = input.substr(startIndex, indexEnd - startIndex);
-        }
+        if (input[startIndex] == '"' && input[indexEnd - 1] == '"')file = input.substr(startIndex + 1, indexEnd - startIndex - 2);                   
+        else file = input.substr(startIndex, indexEnd - startIndex);
         return file;
     }
 
@@ -106,11 +97,15 @@ class Server {
         return stoi(input.substr(input.rfind(' ') + 1));
     }
 
-    string getCommand(const char* input) {
+    string getCommand() {
         string command;
-        stringstream ss(input);
+        stringstream ss(buffer);
         ss >> command;
         return command;
+    }
+
+    bool isInvalidPath(const path& p, const string& command)const {
+        return !exists(p) || (command == "LIST" && !is_directory(p)) || (command != "LIST" && !is_regular_file(p));
     }
 public:
     char buffer[CHUNK_SIZE];
@@ -128,21 +123,17 @@ public:
     }
 
     void sendResponse()  {
-        if (strlen(buffer)==0 ) {
+        string command = getCommand();
+        path p = getPath(command);
+        if (isInvalidPath(p, command)) {
             sendMessage("Request denied.");
             return;
         }
-        string command = getCommand(buffer);
-        string path = getPath(command, buffer);
-        if (path == "") {
-            sendMessage("Request denied.");
-            return;
-        }
-        if (command == "GET") get(path);
-        else if (command == "LIST") list(path);
-        else if (command == "PUT") put(path, getFileSize());
-        else if (command == "INFO") info(path);
-        else if (command == "DELETE_FILE") deleteFile(path);
+        if (command == "GET") get(p);
+        else if (command == "LIST") list(p);
+        else if (command == "PUT") put(p.filename(), getFileSize());
+        else if (command == "INFO") info(p);
+        else if (command == "DELETE") deleteFile(p);
         else  sendMessage("Request denied.");
     }
 };
