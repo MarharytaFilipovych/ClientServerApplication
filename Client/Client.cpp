@@ -1,56 +1,132 @@
 #include <iostream>
 #include <WinSock2.h>
+#define CHUNK_SIZE 1024
 using namespace std;
+#include <filesystem>
+using namespace std::filesystem;
 #include <Ws2tcpip.h>
 #include <fstream>
 #include <sstream>
-
+#include <unordered_set>
 #pragma comment(lib, "ws2_32.lib")
+#include <thread> 
+#include <algorithm>
 
-class Commands {
+class Client {
+	char buffer[CHUNK_SIZE];
+	const SOCKET clientSocket;
 
-	SOCKET clientSocket;
-
-	
-public:
-	Commands(const SOCKET& socket) :clientSocket(socket) {}
+	const int getResponse() {
+		memset(buffer, 0, CHUNK_SIZE);
+		return recv(clientSocket, buffer, sizeof(buffer), 0);
+	}
 
 	void get(const string& filename) {
-		const char* message = ("GET "+filename).c_str();
-		send(clientSocket, message, (int)strlen(message), 0);
-		char buffer[1024];
-		memset(buffer, 0, 1024);
-		int bytesReceived = recv(clientSocket, buffer, (int)sizeof(buffer), 0);
-		if (bytesReceived < 0)return;
-		if (string(buffer) == "I am unable to open your file!") {
-			cout << "Received from server: " << buffer << endl;
+		if (getResponse() < 0)return;
+		if (buffer == "I am unable to open your file!") {
+			cout << "Server: " << buffer << endl;
 			return;
 		}
 		ofstream file(filename, ios::binary);
 		int i = 0;
-		while (i != atoi(buffer)) {
-			memset(buffer, 0, 1024);
-			bytesReceived = recv(clientSocket, buffer, (int)sizeof(buffer), 0);
+		int fileSize = atoi(buffer);
+		cout << "Server: size of file is " << buffer << " bytes." << endl;
+		while (i != fileSize) {
+			int bytesReceived = getResponse();
 			file.write(buffer, bytesReceived);
 			i += bytesReceived;
 		}
 		file.close();
-		cout << "File transfer completed!" << endl;
+		
+	}
 
+	void put(const string& filename) {
+		ifstream file(filename, ios::binary);	
+		char bufferForContent[CHUNK_SIZE];
+		while (file.read(bufferForContent, sizeof(buffer))) {
+			send(clientSocket, bufferForContent, (int)(file.gcount()), 0);
+		} 
+		if (file.gcount() > 0)send(clientSocket, bufferForContent, (int)(file.gcount()), 0);
+		file.close();
+		outputServerResponse();
+	}
+
+	string getFileFromInput(string& command, string& input, int index) {
+		string file;
+		int indexEnd =  input.length();
+		if (input[index] == '"' && input[indexEnd - 1] == '"') file = input.substr(index + 1, indexEnd - index - 2);
+		else file = input.substr(index, indexEnd - index);
+		replace(file.begin(), file.end(), '\\', '/');
+		return file;
+	}
+	string getCommand(string& input) {
+		string command;
+		stringstream ss(input);
+		ss >> command;
+		return command;
+	}
+
+public:
+
+	Client(const SOCKET& socket) : clientSocket(socket) {
+		memset(buffer, 0, CHUNK_SIZE);
+	}
+
+	void outputServerResponse() {
+		if (getResponse() > 0)cout << "Server: " << buffer << endl;
+	}
+
+	void sendMessage(const char* message)const {
+		send(clientSocket, message, (int)strlen(message), 0);
+	}
+	
+
+	void getResponse(string& userInput) {
+		string command = getCommand(userInput);
+		if (command == "PUT") {
+			string file = getFileFromInput(command, userInput, command.length() + 1);
+			if (!is_regular_file(file) || !exists(file) || file_size(file) == 0) {
+				cout << "something wrong with the file!" << endl;
+				return;
+			}
+			sendMessage((userInput + " " + to_string(file_size(file))).c_str());
+			put(file);
+		}	
+		else if (command == "LIST" || command == "INFO" || command == "DELETE") {
+			sendMessage(userInput.c_str());
+			outputServerResponse();
+		}
+		else {
+			sendMessage(userInput.c_str());
+			get(getFileFromInput(command, userInput, command.length() + 1));
+		} 
 	}
 };
+
+struct Validation {
+	static const unordered_set<string> commands;
+
+	static bool isIncorrectRequest(string& input) {
+		if (input.empty())return false;
+		string command;
+		stringstream ss(input);
+		ss >> command;
+		return commands.find(command) == commands.end();
+	}
+};
+const unordered_set<string> Validation::commands = { "GET", "LIST", "PUT", "INFO", "DELETE" };
 
 int main()
 {
 	WSADATA wsaData;
-	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0){
+	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
 		cerr << "WSAStartup failed" << endl;
 		return 1;
 	}
 	int port = 12345;
-	PCWSTR serverIp =  L"127.0.0.1";
+	PCWSTR serverIp = L"127.0.0.1";
 	SOCKET clientSocket = socket(AF_INET, SOCK_STREAM, 0);
-	if (clientSocket == INVALID_SOCKET){
+	if (clientSocket == INVALID_SOCKET) {
 		cerr << "Error creating socket: " << WSAGetLastError() << endl;
 		WSACleanup();
 		return 1;
@@ -65,16 +141,20 @@ int main()
 		WSACleanup();
 		return 1;
 	}
-
-	const char* message = "Hello, server! How are you?";
-	send(clientSocket, message, (int)strlen(message), 0);
-
-	char buffer[1024];
-	memset(buffer, 0, 1024);
-	int bytesReceived = recv(clientSocket, buffer, (int)sizeof(buffer), 0);
-	if (bytesReceived > 0)
-	{
-		cout << "Received from server: " << buffer << endl;
+	Client request(clientSocket);
+	request.sendMessage("Hello, server! How are you?");
+	request.outputServerResponse();
+	string user_input;
+	getline(cin, user_input);
+	while (true) {
+		if (Validation::isIncorrectRequest(user_input)) {
+			cout << "Undefined request" << endl;
+			getline(cin, user_input);
+		}
+		else {
+			request.getResponse(user_input);
+			getline(cin, user_input);
+		} 
 	}
 	closesocket(clientSocket);
 	WSACleanup();

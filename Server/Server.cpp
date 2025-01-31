@@ -7,33 +7,13 @@
 #define CHUNK_SIZE 1024
 using namespace std;
 #include <filesystem>
+#include <thread>
 using namespace std::filesystem;
 #pragma comment(lib, "ws2_32.lib")
-
-class Request {
-
-    char buffer[CHUNK_SIZE];
+const string serverDatabase = ".\\Server database";
+class Server {
     const SOCKET clientSocket;
 
-public:
-    Request(const SOCKET& socket) :clientSocket(socket) {
-        memset(buffer, 0, CHUNK_SIZE);
-    }
-
-    const int getRequest() {
-        memset(buffer, 0, CHUNK_SIZE);
-        return recv(clientSocket, buffer, sizeof(buffer), 0);
-    }
-    const char* readBuffer() const {
-        return buffer;
-    }
-};
-
-
-class Response {
-    const SOCKET clientSocket;
-
-    
     bool fileIsNotOkay(const string& file)const {
         return !exists(file) || !is_regular_file(file);
     }
@@ -46,7 +26,6 @@ class Response {
         result += ((p & perms::owner_exec) != perms::none ? "x" : "-");
         return result;
     }
-
 
     void get(const string& fileName) const{
         if (fileIsNotOkay(fileName)) {
@@ -72,9 +51,18 @@ class Response {
         else sendMessage("Looks like this directory doesn't exist!");
     }
 
-    void put(const string& fileName) const {
-        ofstream file(fileName);
-
+    void put(const string& file_path, int size)  {
+        string fileName = path(file_path).filename().string();
+        string fileNameInDatabase = (path(serverDatabase) / fileName).string();
+        ofstream file(fileNameInDatabase, ios::binary | ios::out);
+        int i = 0;
+        while (i != size) {
+            int bytesReceived = getData();
+            file.write(buffer, bytesReceived);
+            i += bytesReceived;
+        }
+        file.close();
+        sendMessage("File transfer completed!");
 
     }
 
@@ -95,23 +83,67 @@ class Response {
         else sendMessage("The file doesn't exist!");
     }
 
+
+    string getPath(const string& command, const char* buffer) {
+        string input(buffer);
+        if (input.length() <= command.length() + 1) return "";
+        bool isPut = (command == "PUT");
+        int startIndex = command.length() + 1;
+        int indexEnd = isPut ? input.rfind(' ') : input.length();
+        if (indexEnd <= startIndex) return "";  
+        string file;
+        if (input[startIndex] == '"' && input[indexEnd - 1] == '"') {
+            file = input.substr(startIndex + 1, indexEnd - startIndex - 2);
+        }
+        else {
+            file = input.substr(startIndex, indexEnd - startIndex);
+        }
+        return file;
+    }
+
+    int getFileSize() {
+        string input(buffer);
+        return stoi(input.substr(input.rfind(' ') + 1));
+    }
+
+    string getCommand(const char* input) {
+        string command;
+        stringstream ss(input);
+        ss >> command;
+        return command;
+    }
 public:
-    Response(const SOCKET& socket) :clientSocket(socket) {}
+    char buffer[CHUNK_SIZE];
+
+    Server(const SOCKET& socket) :clientSocket(socket) {
+        memset(buffer, 0, CHUNK_SIZE);
+    }
+    const int getData() {
+        memset(buffer, 0, CHUNK_SIZE);
+        return recv(clientSocket, buffer, sizeof(buffer), 0);
+    }
 
     void sendMessage(const char* response)const {
         send(clientSocket, response, (int)strlen(response), 0);
     }
 
-    void sendResponseToRequest(const char* message) const {
-        stringstream stream(message);
-        string command, path;
-        stream >> command >> path;
+    void sendResponse()  {
+        if (strlen(buffer)==0 ) {
+            sendMessage("Request denied.");
+            return;
+        }
+        string command = getCommand(buffer);
+        string path = getPath(command, buffer);
+        if (path == "") {
+            sendMessage("Request denied.");
+            return;
+        }
         if (command == "GET") get(path);
         else if (command == "LIST") list(path);
-        else if (command == "PUT") put(path);
+        else if (command == "PUT") put(path, getFileSize());
         else if (command == "INFO") info(path);
         else if (command == "DELETE_FILE") deleteFile(path);
-        else sendMessage("Request denied.");
+        else  sendMessage("Request denied.");
     }
 };
 
@@ -136,7 +168,13 @@ int main()
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_addr.s_addr = INADDR_ANY;
     serverAddr.sin_port = htons(port);
-
+    if (bind(serverSocket, reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr)) == SOCKET_ERROR)
+    {
+        std::cerr << "Bind failed with error: " << WSAGetLastError() << std::endl;
+        closesocket(serverSocket);
+        WSACleanup();
+        return 1;
+    }
     if (listen(serverSocket, SOMAXCONN) == SOCKET_ERROR) {
         cerr << "Listen failed with error: " << WSAGetLastError() <<endl;
         closesocket(serverSocket);
@@ -151,22 +189,23 @@ int main()
         WSACleanup();
         return 1;
     }
-    Request request(clientSocket);
-    Response response(clientSocket);
-    
-    if (request.getRequest() > 0) {
-        cout << "Received data: " << request.readBuffer() << endl;
-        response.sendMessage("Hello, client! This is the server.");
-    }
 
-    while (true) {
-        if (request.getRequest() > 0) {
-            const char* buffer = request.readBuffer();
-            cout << "Received request: " << buffer << endl;
-            response.sendResponseToRequest(buffer);
-        }
-        else break;
+    Server server(clientSocket);
+    
+    if (server.getData() > 0) {
+        cout << "Client: " << server.buffer << endl;
+        server.sendMessage("Hello, client! This is the server.");
     }
+    while (true) {
+
+        if (server.getData() > 0) {
+            cout << "Client: " << server.buffer << endl;
+            server.sendResponse();
+        }
+
+   }
+        
+    
 
     closesocket(clientSocket);
     closesocket(serverSocket);
