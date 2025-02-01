@@ -69,6 +69,7 @@ public class Client {
         else file = filePart;
         return Paths.get(file.replace('\\', '/'));
     }
+
     public void sendMessage(String message){
         out.print(message);
         out.flush();
@@ -94,7 +95,8 @@ public class Client {
                     sendMessage(userInput + " " + Files.size(file));
                     put(file);
                 } catch (IOException e) {
-                    throw new RuntimeException(e);
+                    System.out.println("Error processing PUT request: " + e.getMessage());
+                    return;
                 }
                 break;
             case "GET":
@@ -106,9 +108,10 @@ public class Client {
                     return;
                 }
                 int size=Integer.parseInt(response.trim());
-                get(getFile(parts[1]), size);}
-                catch(IOException e){
+                get(getFile(parts[1]), size);
+                } catch(IOException e){
                     System.out.println("Error processing GET request: " + e.getMessage());
+                    return;
                 }
                 break;
         }

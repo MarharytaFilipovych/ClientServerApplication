@@ -8,7 +8,7 @@ using namespace std;
 #include <filesystem>
 using namespace std::filesystem;
 #pragma comment(lib, "ws2_32.lib")
-const string serverDatabase = ".\\Server database";
+const path serverDatabase = ".\\Server database";
 
 
 class Server {

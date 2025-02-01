@@ -51,7 +51,7 @@ class Client {
 		outputServerResponse();
 	}
 
-	path getFileFromInput(string& command, string& input, int index) {
+	path getFileFromInput(string& input, int index) {
 		string file;
 		int indexEnd =  input.length();
 		if (input[index] == '"' && input[indexEnd - 1] == '"') file = input.substr(index + 1, indexEnd - index - 2);
@@ -85,7 +85,7 @@ public:
 	void getResponse(string& userInput) {
 		string command = getCommand(userInput);
 		if (command == "PUT") {
-			path file = getFileFromInput(command, userInput, command.length() + 1);
+			path file = getFileFromInput(userInput, command.length() + 1);
 			if (!is_regular_file(file) || !exists(file) || file_size(file) == 0) {
 				cout << "\033[95mSomething wrong with the file!" << endl;
 				return;
@@ -99,7 +99,7 @@ public:
 		}
 		else {
 			sendMessage(userInput.c_str());
-			get(getFileFromInput(command, userInput, command.length() + 1));
+			get(getFileFromInput(userInput, command.length() + 1));
 		} 
 	}
 };
@@ -107,12 +107,17 @@ public:
 struct Validation {
 	static const unordered_set<string> commands;
 
+	static string toUpper(string input) {
+		 transform(input.begin(), input.end(), input.begin(), ::toupper);
+		 return input;
+	}
+
 	static bool isIncorrectRequest(string& input) {
 		if (input.empty())return false;
 		string command;
 		stringstream ss(input);
 		ss >> command;
-		return commands.find(command) == commands.end() || input.length()<=command.length();
+		return commands.find(toUpper(command)) == commands.end() || input.length()<=command.length()+1;
 	}
 };
 const unordered_set<string> Validation::commands = { "GET", "LIST", "PUT", "INFO", "DELETE" };
@@ -148,17 +153,19 @@ int main()
 	string user_input;
 	getline(cin, user_input);
 	while (true) {
+		if (Validation::toUpper(user_input) == "EXIT") {
+			cout << "\033[95Client decided to terminate the connection" << endl;
+			break;
+		}
 		if (Validation::isIncorrectRequest(user_input)) {
 			cout << "\033[95mUndefined request" << endl;
-			getline(cin, user_input);
 		}
 		else {
 			request.getResponse(user_input);
-			getline(cin, user_input);
 		} 
+		getline(cin, user_input);
 	}
 	closesocket(clientSocket);
 	WSACleanup();
-
 }
 
