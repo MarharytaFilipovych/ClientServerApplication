@@ -39,7 +39,6 @@ public class Client {
     }
     public void get(Path filePath){
         String response = getResponse(getBytesRead());
-        System.out.println(response);
         if(response.equals("Request denied.")) {
             System.out.println(response);
             return;
@@ -47,11 +46,11 @@ public class Client {
         int size=Integer.parseInt(response.trim());
         Path fullPath = database.resolve(filePath.getFileName());
         try{
-            File file = fullPath.toFile();
-            BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(new FileOutputStream(file), CHUNK);
+            BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(new FileOutputStream(fullPath.toFile()), CHUNK);
             int i = 0;
+            int bytesReceived=0;
             while(i < size){
-                int bytesReceived = getBytesRead();
+                 bytesReceived = getBytesRead();
                 bufferedOutputStream.write(getResponse(bytesReceived).getBytes(), 0, bytesReceived);
                 i+=bytesReceived;
             }
@@ -65,17 +64,14 @@ public class Client {
     public void put(Path filePath){
         File file = filePath.toFile();
         try {
-            BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(socket.getOutputStream());
             BufferedInputStream bufferedInputStream = new BufferedInputStream(new FileInputStream(file), CHUNK);
             int bytesRead;
             byte[] bufferForContent = new byte[CHUNK];
             while((bytesRead = bufferedInputStream.read(bufferForContent))!=-1){
-                bufferedOutputStream.write(bufferForContent, 0, bytesRead);
+                socket.getOutputStream().write(bufferForContent, 0, bytesRead);
             }
-            bufferedOutputStream.flush();
-            bufferedInputStream.close();
-            bufferedOutputStream.close();
-            System.out.println(getResponse(getBytesRead()));
+            socket.getOutputStream().flush();
+            outputServerResponse();
         } catch (IOException e) {
             System.out.println("An error occurred while file sending.");
         }
