@@ -1,5 +1,6 @@
 import java.io.*;
 import java.net.Socket;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
@@ -16,56 +17,108 @@ public class Client {
         in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         out = new PrintWriter(socket.getOutputStream(), true);
     }
-    private String getResponse() {
+
+    private int getBytesRead() {
         int bytesRead;
         try {
-            if((bytesRead = in.read(buffer, 0, CHUNK)) != -1)return new String(buffer, 0, bytesRead);
+            if((bytesRead = in.read(buffer, 0, CHUNK)) != -1)return bytesRead;
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-        return null;
+        return -1;
     }
 
-    public String get(Path filePath){
-        String response = getResponse();
-        if(response.equals("Request denied."))return response;
+    private String getResponse(int bytesRead){
+        return new String(buffer, 0, bytesRead);
+    }
+
+    public void outputServerResponse(){
+        int bytesRead = getBytesRead();
+        if(bytesRead > 0)System.out.println(getResponse(bytesRead));
+        else System.out.println("No response from server!");
+    }
+    public void get(Path filePath){
+        String response = getResponse(getBytesRead());
+        System.out.println(response);
+        if(response.equals("Request denied.")) {
+            System.out.println(response);
+            return;
+        }
+        int size=Integer.parseInt(response.trim());
         Path fullPath = database.resolve(filePath.getFileName());
         try{
             File file = fullPath.toFile();
-            int size = Integer.parseInt(response.trim());
-            FileOutputStream output = new FileOutputStream(file);
-            int bytesReceived = 0;
-            while(bytesReceived < size){
-                String chunk = getResponse();
-                if(chunk == null)break;
-                output.write(chunk.getBytes());
-                bytesReceived+=chunk.getBytes().length;
+            BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(new FileOutputStream(file), CHUNK);
+            int i = 0;
+            while(i < size){
+                int bytesReceived = getBytesRead();
+                bufferedOutputStream.write(getResponse(bytesReceived).getBytes(), 0, bytesReceived);
+                i+=bytesReceived;
             }
-            output.close();
-            return "File received.";
+            bufferedOutputStream.close();
+            System.out.println( "File received.");
         }catch(IOException e){
-            e.printStackTrace();
-            return "An error occurred while file transfering.";
+            System.out.println("An error occurred while file transferring.");
         }
     }
 
+    public void put(Path filePath){
+        File file = filePath.toFile();
+        try {
+            BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(socket.getOutputStream());
+            BufferedInputStream bufferedInputStream = new BufferedInputStream(new FileInputStream(file), CHUNK);
+            int bytesRead;
+            byte[] bufferForContent = new byte[CHUNK];
+            while((bytesRead = bufferedInputStream.read(bufferForContent))!=-1){
+                bufferedOutputStream.write(bufferForContent, 0, bytesRead);
+            }
+            bufferedOutputStream.flush();
+            bufferedInputStream.close();
+            bufferedOutputStream.close();
+            System.out.println(getResponse(getBytesRead()));
+        } catch (IOException e) {
+            System.out.println("An error occurred while file sending.");
+        }
+    }
+
+    private Path getFile(String filePart){
+        String file;
+        if(filePart.charAt(0)=='"' && filePart.charAt(filePart.length()-1)=='"') file=filePart.substring(1, filePart.length()-1);
+        else file = filePart;
+        return Paths.get(file.replace('\\', '/'));
+    }
     public void sendMessage(String message){
-        out.println(message);
+        out.print(message);
+        out.flush();
     }
 
-    public void sendRequest(String userInput){
-        String command = userInput.substring(0, userInput.indexOf(" "));
-        if(command.equals("LIST") || command.equals("INFO") || command.equals("DELETE")){
-            out.println(userInput);
-        }else if(command.equals("PUT")){
-
-        }else{
-            out.println(userInput);
+    public void processRequest(String userInput){
+        String[] parts = userInput.split(" ", 2);
+        String command = parts[0];
+        switch (command){
+            case "LIST":
+            case "INFO":
+            case "DELETE":
+                sendMessage(userInput);
+                outputServerResponse();
+                break;
+            case "PUT":
+                Path file = getFile(parts[1]);
+                try{
+                    if(!Files.exists(file) || !Files.isRegularFile(file) || Files.size(file)==0){
+                        System.out.println("Something wrong with the file!");
+                        return;
+                    }
+                    sendMessage(userInput + " " + Files.size(file));
+                    put(file);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+                break;
+            case "GET":
+                sendMessage(userInput);
+                get(getFile(parts[1]));
+                break;
         }
-
     }
-
-
-
-
 }
