@@ -8,7 +8,7 @@
 #define CHUNK_SIZE 1024
 using namespace std;
 using namespace filesystem;
-const path serverDatabase = ".\\database";
+const path database = ".\\database";
 
 class Server {
 
@@ -31,11 +31,11 @@ class Server {
         ifstream file(file_name, ios::binary);
 
         SendResponse(to_string(file_size(file_name)).c_str());
-        char bufferForData[CHUNK_SIZE];
-        while (file.read(bufferForData, sizeof(bufferForData))) {
-            send(client_socket_, bufferForData, (int)(file.gcount()), 0);
+        char buffer_for_data[CHUNK_SIZE];
+        while (file.read(buffer_for_data, sizeof(buffer_for_data))) {
+            send(client_socket_, buffer_for_data, (int)(file.gcount()), 0);
         }
-        if (file.gcount() > 0)send(client_socket_, bufferForData, (int)(file.gcount()), 0);
+        if (file.gcount() > 0)send(client_socket_, buffer_for_data, (int)(file.gcount()), 0);
         file.close();
     }
 
@@ -57,11 +57,11 @@ class Server {
     }
 
     void Put(const path& file_path, int size)  {
-        path file_name = serverDatabase /file_path.filename();
+        path file_name = database /file_path.filename();
         ofstream file(file_name, ios::binary);
         int i = 0;
         while (i != size) {
-            int bytes_received = GetData();
+            int bytes_received = GetReadBytes();
             file.write(buffer_, bytes_received);
             i += bytes_received;
         }
@@ -121,7 +121,7 @@ public:
         memset(buffer_, 0, CHUNK_SIZE);
     }
 
-    const int GetData() {
+    const int GetReadBytes() {
         memset(buffer_, 0, CHUNK_SIZE);
         return recv(client_socket_, buffer_, sizeof(buffer_), 0);
     }
@@ -195,11 +195,11 @@ int main()
 
     Server server(client_socket);
     
-    if (server.GetData() > 0) {
+    if (server.GetReadBytes() > 0) {
         cout << "\033[95m" << server.buffer_ <<"\033[0m"<< endl;
         server.SendResponse("Hello, client! This is the server.");
     }
-    while (server.GetData() > 0) {   
+    while (server.GetReadBytes() > 0) {   
         cout << "\033[95m" << server.buffer_ <<"\033[94m" <<endl;
         server.ProcessRequest();     
    }

@@ -20,7 +20,7 @@ class Client {
 		return recv(client_socket_, buffer_, sizeof(buffer_), 0);
 	}
 
-	void get(const path& file_path) {
+	void Get(const path& file_path) {
 		if (GetReadBytes() < 0)return;
 		if (string(buffer_) == "Request denied.") {
 			cout << "\033[94m" << buffer_ << endl;
@@ -41,11 +41,11 @@ class Client {
 
 	void Put(const path& file_name) {
 		ifstream file(file_name, ios::binary);	
-		char buffer_for_content[CHUNK_SIZE];
-		while (file.read(buffer_for_content, sizeof(buffer_for_content))) {
-			send(client_socket_, buffer_for_content, (int)(file.gcount()), 0);
+		char buffer_for_data[CHUNK_SIZE];
+		while (file.read(buffer_for_data, sizeof(buffer_for_data))) {
+			send(client_socket_, buffer_for_data, (int)(file.gcount()), 0);
 		} 
-		if (file.gcount() > 0)send(client_socket_, buffer_for_content, (int)(file.gcount()), 0);
+		if (file.gcount() > 0)send(client_socket_, buffer_for_data, (int)(file.gcount()), 0);
 		file.close();
 		OutputServerResponse();
 	}
@@ -97,7 +97,7 @@ public:
 		}
 		else {
 			SendMessageToServer(user_input.c_str());
-			get(GetFileFromInput(user_input, command.length() + 1));
+			Get(GetFileFromInput(user_input, command.length() + 1));
 		} 
 	}
 };
@@ -148,20 +148,20 @@ int main()
 		return 1;
 	}
 
-	Client request(client_socket);
-	request.SendMessageToServer("Hello, server! How are you?");
-	request.OutputServerResponse();
+	Client client(client_socket);
+	client.SendMessageToServer("Hello, server! How are you?");
+	client.OutputServerResponse();
 
 	string user_input;
 	getline(cin, user_input);
 	while (true) {
 		if (Validation::ToUpper(user_input) == "EXIT") {
-			cout << "\033[95Client decided to terminate the connection." << endl;
+			client.SendMessageToServer("Client decided to terminate the connection.");
 			break;
 		}
 		if (Validation::IsIncorrectRequest(user_input))cout << "\033[95mUndefined request." << endl; 
 		else if (user_input.length()> CHUNK_SIZE)cout << "\033[95The message length exceeds 1024 bytes, which is the maximum." << endl;
-		else request.ProcessRequest(user_input);
+		else client.ProcessRequest(user_input);
 		getline(cin, user_input);
 	}
 
