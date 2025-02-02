@@ -36,7 +36,7 @@ class Client {
 			i += bytes_received;
 		}
 		file.close();
-		cout << "\033[95mFile received." << endl;		
+		OutputServerResponse();
 	}
 
 	void Put(const path& file_name) {

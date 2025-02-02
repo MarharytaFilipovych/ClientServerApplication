@@ -43,7 +43,7 @@ public class Client {
                 bufferedOutputStream.write(buffer, 0, bytesReceived);
                 i+=bytesReceived;
             }
-            System.out.println( "File received.");
+            outputServerResponse();
         }catch(IOException e){
             System.out.println("An error occurred while receiving the file: " + e.getMessage());
         }

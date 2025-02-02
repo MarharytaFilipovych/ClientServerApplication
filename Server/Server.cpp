@@ -99,6 +99,8 @@ class Server {
         }
         if (file.gcount() > 0)send(client_socket_, buffer_for_data, (int)(file.gcount()), 0);
         file.close();
+        SendResponse("File transfer completed!");
+
     }
 
     void List(const path& dir_path)const {
@@ -119,7 +121,6 @@ class Server {
                 SendResponse(list.c_str());
             }         
         }
-        else SendResponse("Looks like this directory doesn't exist!");
     }
 
     void Put(const path& file_path, int size)  {
