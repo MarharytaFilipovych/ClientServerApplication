@@ -5,7 +5,8 @@ public enum Request {
     GET,
     DELETE,
     INFO,
-    LIST;
+    LIST,
+    REMOVE;
 
     public static boolean isInvalidRequest(String userInput){
         if(userInput.isBlank())return false;

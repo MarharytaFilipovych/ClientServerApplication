@@ -91,13 +91,13 @@ public:
 			SendMessageToServer((user_input + " " + to_string(file_size(file))).c_str());
 			Put(file);
 		}	
-		else if (command == "LIST" || command == "INFO" || command == "DELETE") {
+		else if (command == "GET") {
 			SendMessageToServer(user_input.c_str());
-			OutputServerResponse();
+			Get(GetFileFromInput(user_input, command.length() + 1));
 		}
 		else {
 			SendMessageToServer(user_input.c_str());
-			Get(GetFileFromInput(user_input, command.length() + 1));
+			OutputServerResponse();
 		} 
 	}
 };
@@ -118,7 +118,7 @@ struct Validation {
 		return commands.find(ToUpper(command)) == commands.end() || input.length()<=command.length()+1;
 	}
 };
-const unordered_set<string> Validation::commands = { "GET", "LIST", "PUT", "INFO", "DELETE" };
+const unordered_set<string> Validation::commands = { "GET", "LIST", "PUT", "INFO", "DELETE", "REMOVE"};
 
 int main()
 {
@@ -156,10 +156,10 @@ int main()
 	getline(cin, user_input);
 	while (true) {
 		if (Validation::ToUpper(user_input) == "EXIT") {
-			client.SendMessageToServer("Client decided to terminate the connection.");
+			client.SendMessageToServer("\033[91mClient decided to terminate the connection.\033[0m");
 			break;
 		}
-		if (Validation::IsIncorrectRequest(user_input))cout << "\033[95mUndefined request." << endl; 
+		if (Validation::IsIncorrectRequest(user_input))cout << "\033[91mUndefined request.\033[95m" << endl; 
 		else if (user_input.length()> CHUNK_SIZE)cout << "\033[95The message length exceeds 1024 bytes, which is the maximum." << endl;
 		else client.ProcessRequest(user_input);
 		getline(cin, user_input);

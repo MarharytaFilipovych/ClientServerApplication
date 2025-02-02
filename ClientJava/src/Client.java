@@ -27,7 +27,7 @@ public class Client {
     public void outputServerResponse(){
         try{
             int bytesRead = readBytes();
-            if(bytesRead > 0)System.out.println(getResponse(bytesRead));
+            if(bytesRead > 0)System.out.println("\033[94m"+getResponse(bytesRead)+"\033[0m");
             else System.out.println("No response from server!");
         }catch(IOException e){
             System.out.println("Error reading server response: " + e.getMessage());
@@ -77,15 +77,16 @@ public class Client {
 
     public void processRequest(String userInput){
         String[] parts = userInput.split(" ", 2);
-        String command = parts[0];
-        switch (command){
-            case "LIST":
-            case "INFO":
-            case "DELETE":
+        Request request = Request.valueOf(parts[0].toUpperCase());
+        switch (request){
+            case LIST:
+            case INFO:
+            case DELETE:
+            case REMOVE:
                 sendMessage(userInput);
                 outputServerResponse();
                 break;
-            case "PUT":
+            case PUT:
                 Path file = getFile(parts[1]);
                 try{
                     if(!Files.exists(file) || !Files.isRegularFile(file) || Files.size(file)==0){
@@ -99,7 +100,7 @@ public class Client {
                     return;
                 }
                 break;
-            case "GET":
+            case GET:
                 sendMessage(userInput);
                 try{
                 String response = getResponse(readBytes()).trim();
@@ -110,7 +111,7 @@ public class Client {
                 int size=Integer.parseInt(response.trim());
                 get(getFile(parts[1]), size);
                 } catch(IOException e){
-                    System.out.println("Error processing GET request: " + e.getMessage());
+                    System.out.println("mError processing GET request: " + e.getMessage());
                     return;
                 }
                 break;

@@ -10,6 +10,68 @@ using namespace std;
 using namespace filesystem;
 const path database = ".\\database";
 
+class RequestProcessing {
+
+    string request;
+    string command;
+    path path_to;
+    bool invalid;
+
+    string ToUpper(string word)const {
+        transform(word.begin(), word.end(), word.begin(), ::toupper);
+        return word;
+    }
+
+    string GetCommandForConstructor() {
+        string command;
+        stringstream ss(request);
+        ss >> command;
+        return command;
+    }
+
+    const path GetPathForConstructor() {
+        bool is_put_command = (command == "PUT");
+        int start_index = command.length() + 1;
+        int index_end = is_put_command ? request.rfind(' ') : request.length();
+        string file;
+        if (request[start_index] == '"' && request[index_end - 1] == '"')file = request.substr(start_index + 1, index_end - start_index - 2);
+        else file = request.substr(start_index, index_end - start_index);
+        replace(file.begin(), file.end(), '\\', '/');
+        return file;
+    }
+
+    bool IsInvalidPath() {
+        if (!exists(path_to)) return true;
+        if (command == "LIST" || command == "REMOVE")  return !is_directory(path_to);
+        else return !is_regular_file(path_to);
+    }
+
+public:
+    RequestProcessing(const char* input): request(input){
+        command = ToUpper(GetCommandForConstructor());
+        path_to = GetPathForConstructor();
+        invalid = IsInvalidPath();   
+    }
+
+     int GetFileSize()const {
+        int size = 0;
+        if (command == "PUT" && !invalid)size = stoi(request.substr(request.rfind(' ') + 1));
+        return size;
+     }  
+
+    bool isInValid()const {
+        return invalid;
+    }
+
+    const string GetCommand() const {
+        return command;
+    }
+
+    const path GetPath() const {
+        return path_to;
+    }
+};
+
 class Server {
 
     const SOCKET client_socket_;
@@ -25,7 +87,7 @@ class Server {
 
     void Get(const path& file_name) const {
         if (!is_regular_file(file_name)) {
-            SendResponse("I am unable to open your file!");
+            SendResponse("The path specified is not a regular file!");
             return;
         }
         ifstream file(file_name, ios::binary);
@@ -51,7 +113,11 @@ class Server {
                     return;
                 }
             }
-            SendResponse(list.c_str());
+            if (list.empty())SendResponse("The folder is empty!");
+            else if (list.back() == '\n') {
+                list.pop_back();
+                SendResponse(list.c_str());
+            }         
         }
         else SendResponse("Looks like this directory doesn't exist!");
     }
@@ -81,38 +147,14 @@ class Server {
         SendResponse(info.c_str());             
     }
 
-    void DeleteFileSpecified(path& file) const {
-        if(remove(file))SendResponse("Successful removal!");
-        else SendResponse("The file doesn't exist!");
+    void RemoveFolder(const path& folder)const {
+         int count = remove_all(folder);
+         count > 0 ? SendResponse("Successful removal!") : SendResponse("The directory could not be deleted!");
     }
 
-    const path GetPath(const string& command)const {
-        string input(buffer_);
-        bool is_put_command = (command == "PUT");
-        int start_index = command.length() + 1;
-        int index_end = is_put_command ? input.rfind(' ') : input.length();
-        string file;
-        if (input[start_index] == '"' && input[index_end - 1] == '"')file = input.substr(start_index + 1, index_end - start_index - 2);                   
-        else file = input.substr(start_index, index_end - start_index);
-        replace(file.begin(), file.end(), '\\', '/');
-        return file;
-    }
-
-    const int GetFileSize()const {
-        string input(buffer_);
-        return stoi(input.substr(input.rfind(' ') + 1));
-    }
-
-    const string GetCommand()const {
-        string command;
-        stringstream ss(buffer_);
-        ss >> command;
-        return command;
-    }
-
-    bool IsInvalidPath(const path& p, const string& command)const {
-        return !exists(p) || (command == "LIST" && !is_directory(p)) || (command != "LIST" && !is_regular_file(p));
-    }
+    void DeleteFileSpecified(const path& path_to) const {
+        remove(path_to)? SendResponse("Successful removal!"): SendResponse("The file could not be deleted!");
+    }  
 
 public:
     char buffer_[CHUNK_SIZE];
@@ -128,37 +170,40 @@ public:
 
     void SendResponse(const char* response)const {
         send(client_socket_, response, (int)strlen(response), 0);
+        //cout << "\033[94m" << response << "\033[0m" << endl;
     }
 
     void ProcessRequest()  {
-        string command = GetCommand();
-        path p = GetPath(command);
-        if (IsInvalidPath(p, command)) {
+        RequestProcessing request(buffer_);
+        if (request.isInValid()) {
             SendResponse("Request denied.");
             return;
         }
+        string command = request.GetCommand();
+        path p = request.GetPath();
+       
         if (command == "GET") Get(p);
         else if (command == "LIST") List(p);
-        else if (command == "PUT") Put(p.filename(), GetFileSize());
+        else if (command == "PUT") Put(p.filename(), request.GetFileSize());
         else if (command == "INFO") GetFileInfo(p);
         else if (command == "DELETE") DeleteFileSpecified(p);
+        else if (command == "REMOVE")RemoveFolder(p);
         else  SendResponse("Request denied.");
     }
 };
-
 
 int main()
 {
     WSADATA wsa_data;
     if (WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0) {
-        cerr << "WSAStartup failed!" << endl;
+        cerr << "\033[94mWSAStartup failed!\033[0m" << endl;
         return 1;
     }
 
     const int port = 12345;
     SOCKET server_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (server_socket == INVALID_SOCKET) {
-        cerr << "\033[95mError craeting socket: " << WSAGetLastError() << "\033[0m" << endl;
+        cerr << "\033[94mError craeting socket: " << WSAGetLastError() << "\033[0m" << endl;
         WSACleanup();
         return 1;
     }
@@ -170,20 +215,20 @@ int main()
 
     if (bind(server_socket, reinterpret_cast<sockaddr*>(&server_addr), sizeof(server_addr)) == SOCKET_ERROR)
     {
-        cerr << "\033[95mBind failed with error: " << WSAGetLastError() << "\033[0m" << endl;
+        cerr << "\033[94mBind failed with error: " << WSAGetLastError() << "\033[0m" << endl;
         closesocket(server_socket);
         WSACleanup();
         return 1;
     }
 
     if (listen(server_socket, SOMAXCONN) == SOCKET_ERROR) {
-        cerr << "\033[95mListen failed with error: " << WSAGetLastError() << "\033[0m" <<endl;
+        cerr << "\033[94mListen failed with error: " << WSAGetLastError() << "\033[0m" <<endl;
         closesocket(server_socket);
         WSACleanup();
         return 1;
     }
 
-    cout << "\033[95mServer listening on port " << port << "\033[0m" << endl;
+    cout << "\033[94mServer listening on port " << port << "\033[0m" << endl;
 
     SOCKET client_socket = accept(server_socket, nullptr, nullptr);
     if (client_socket == INVALID_SOCKET) {
