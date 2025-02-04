@@ -4,6 +4,8 @@
 #include <string>
 #include <sstream>
 #include <filesystem>
+#include <vector>
+#include <thread>
 #pragma comment(lib, "ws2_32.lib")
 #define CHUNK_SIZE 1024
 using namespace std;
@@ -72,7 +74,7 @@ public:
     }
 };
 
-class Server {
+class ServedClient {
 
     const SOCKET client_socket_;
 
@@ -160,7 +162,7 @@ class Server {
 public:
     char buffer_[CHUNK_SIZE];
 
-    Server(const SOCKET& socket) :client_socket_(socket) {
+    ServedClient(const SOCKET& socket) :client_socket_(socket) {
         memset(buffer_, 0, CHUNK_SIZE);
     }
 
@@ -193,8 +195,26 @@ public:
     }
 };
 
+
+void HandleClient(int client_socket) {
+    ServedClient client_server(client_socket);
+    if (client_server.GetReadBytes() > 0) {
+        cout << "\033[95m" << client_server.buffer_ << "\033[0m" << endl;
+        client_server.SendResponse("Hello, client! This is the server.");
+    }
+    while (client_server.GetReadBytes() > 0) {
+        cout << "\033[95m" << client_server.buffer_ << "\033[94m" << endl;
+        client_server.ProcessRequest();
+    }
+    closesocket(client_socket);
+    cout << "\033[94mClient disconnected.\033[0m" << endl;
+}
+
+
+
 int main()
 {
+    vector<thread> threads;
     WSADATA wsa_data;
     if (WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0) {
         cerr << "\033[94mWSAStartup failed!\033[0m" << endl;
@@ -231,26 +251,18 @@ int main()
 
     cout << "\033[94mServer listening on port " << port << "\033[0m" << endl;
 
-    SOCKET client_socket = accept(server_socket, nullptr, nullptr);
-    if (client_socket == INVALID_SOCKET) {
-        cerr << "\033[95mAccept failed with error: " << WSAGetLastError() << "\033[0m" << endl;
-        closesocket(server_socket);
-        WSACleanup();
-        return 1;
+    while (true) {
+        SOCKET client_socket = accept(server_socket, nullptr, nullptr);
+        if (client_socket == INVALID_SOCKET) {
+            cerr << "\033[95mAccept failed with error: " << WSAGetLastError() << "\033[0m" << endl;
+            closesocket(server_socket);
+            WSACleanup();
+            continue;
+        }
+        threads.emplace_back(HandleClient, client_socket);
+        threads.back().detach();
     }
-
-    Server server(client_socket);
-    
-    if (server.GetReadBytes() > 0) {
-        cout << "\033[95m" << server.buffer_ <<"\033[0m"<< endl;
-        server.SendResponse("Hello, client! This is the server.");
-    }
-    while (server.GetReadBytes() > 0) {   
-        cout << "\033[95m" << server.buffer_ <<"\033[94m" <<endl;
-        server.ProcessRequest();     
-   }
         
-    closesocket(client_socket);
     closesocket(server_socket);
     WSACleanup();
     return 0; 
