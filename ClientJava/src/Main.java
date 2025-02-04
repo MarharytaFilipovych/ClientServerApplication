@@ -22,7 +22,10 @@ public class Main {
                 }
                 if(Request.isInvalidRequest(userInput.trim()))System.out.println("\033[91mUndefined request.\033[0m");
                 else if (userInput.trim().length() > 1024)System.out.println("The message length exceeds 1024 bytes, which is the maximum.");
-                else client.processRequest(userInput.trim());
+                else{
+                    client.processRequest(userInput.trim());
+                    client.outputServerResponse();
+                }
                 userInput = scanner.nextLine();
             }
             socket.close();
