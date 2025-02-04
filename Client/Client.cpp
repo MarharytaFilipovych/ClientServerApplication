@@ -21,33 +21,30 @@ class Client {
 	}
 
 	void Get(const path& file_path) {
-		if (GetReadBytes() < 0)return;
-		if (string(buffer_) == "Request denied.") {
-			cout << "\033[94m" << buffer_ << endl;
-			return;
-		}
+		int size_of_file;
+		recv(client_socket_, (char*)(&size_of_file), sizeof(size_of_file), 0);
 		path file_name = database / file_path.filename();
 		ofstream file(file_name, ios::binary);
 		int i = 0;
-		int size = atoi(buffer_);
-		while (i != size) {
+		while (i != size_of_file) {
 			int bytes_received = GetReadBytes();
 			file.write(buffer_, bytes_received);
 			i += bytes_received;
 		}
 		file.close();
-		OutputServerResponse();
 	}
 
 	void Put(const path& file_name) {
-		ifstream file(file_name, ios::binary);	
+		int size_of_file = file_size(file_name);
+		send(client_socket_, (char*)(&size_of_file), sizeof(size_of_file), 0);
+		ifstream file(file_name, ios::binary);
 		char buffer_for_data[CHUNK_SIZE];
 		while (file.read(buffer_for_data, sizeof(buffer_for_data))) {
 			send(client_socket_, buffer_for_data, (int)(file.gcount()), 0);
 		} 
 		if (file.gcount() > 0)send(client_socket_, buffer_for_data, (int)(file.gcount()), 0);
 		file.close();
-		OutputServerResponse();
+		//OutputServerResponse();
 	}
 
 	const path GetFileFromInput(string& input, int index) const{
@@ -88,17 +85,16 @@ public:
 				cout << "\033[95mSomething wrong with the file!" << endl;
 				return;
 			}
-			SendMessageToServer((user_input + " " + to_string(file_size(file))).c_str());
+			SendMessageToServer((user_input).c_str());
 			Put(file);
 		}	
 		else if (command == "GET") {
 			SendMessageToServer(user_input.c_str());
 			Get(GetFileFromInput(user_input, command.length() + 1));
 		}
-		else {
-			SendMessageToServer(user_input.c_str());
-			OutputServerResponse();
-		} 
+		else SendMessageToServer(user_input.c_str());
+			
+		 
 	}
 };
 
@@ -161,7 +157,10 @@ int main()
 		}
 		if (Validation::IsIncorrectRequest(user_input))cout << "\033[91mUndefined request.\033[95m" << endl; 
 		else if (user_input.length()> CHUNK_SIZE)cout << "\033[95The message length exceeds 1024 bytes, which is the maximum." << endl;
-		else client.ProcessRequest(user_input);
+		else { 
+			client.ProcessRequest(user_input);
+			client.OutputServerResponse();
+		};
 		getline(cin, user_input);
 	}
 

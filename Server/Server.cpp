@@ -32,7 +32,7 @@ class RequestProcessing {
     const path GetPathForConstructor() {
         bool is_put_command = (command == "PUT");
         int start_index = command.length() + 1;
-        int index_end = is_put_command ? request.rfind(' ') : request.length();
+        int index_end = request.length();
         string file;
         if (request[start_index] == '"' && request[index_end - 1] == '"')file = request.substr(start_index + 1, index_end - start_index - 2);
         else file = request.substr(start_index, index_end - start_index);
@@ -53,11 +53,6 @@ public:
         invalid = IsInvalidPath();   
     }
 
-     int GetFileSize()const {
-        int size = 0;
-        if (command == "PUT" && !invalid)size = stoi(request.substr(request.rfind(' ') + 1));
-        return size;
-     }  
 
     bool isInValid()const {
         return invalid;
@@ -86,18 +81,17 @@ class Server {
     }
 
     void Get(const path& file_name) const {
-        if (!is_regular_file(file_name)) {
-            SendResponse("The path specified is not a regular file!");
-            return;
-        }
         ifstream file(file_name, ios::binary);
-
-        SendResponse(to_string(file_size(file_name)).c_str());
+        int size = file_size(file_name);
+        send(client_socket_, (char*)(&size), sizeof(size), 0);
         char buffer_for_data[CHUNK_SIZE];
         while (file.read(buffer_for_data, sizeof(buffer_for_data))) {
             send(client_socket_, buffer_for_data, (int)(file.gcount()), 0);
         }
-        if (file.gcount() > 0)send(client_socket_, buffer_for_data, (int)(file.gcount()), 0);
+        int remaining_bytes = file.gcount();
+        if (remaining_bytes > 0) {
+            send(client_socket_, buffer_for_data, (int)remaining_bytes, 0);
+        }
         file.close();
         SendResponse("File transfer completed!");
 
@@ -123,11 +117,13 @@ class Server {
         }
     }
 
-    void Put(const path& file_path, int size)  {
+    void Put(const path& file_path)  {
+        int size_of_file;
+        recv(client_socket_, (char*)(&size_of_file), sizeof(size_of_file), 0);
         path file_name = database /file_path.filename();
         ofstream file(file_name, ios::binary);
         int i = 0;
-        while (i != size) {
+        while (i != size_of_file) {
             int bytes_received = GetReadBytes();
             file.write(buffer_, bytes_received);
             i += bytes_received;
@@ -185,7 +181,7 @@ public:
        
         if (command == "GET") Get(p);
         else if (command == "LIST") List(p);
-        else if (command == "PUT") Put(p.filename(), request.GetFileSize());
+        else if (command == "PUT") Put(p.filename());
         else if (command == "INFO") GetFileInfo(p);
         else if (command == "DELETE") DeleteFileSpecified(p);
         else if (command == "REMOVE")RemoveFolder(p);
