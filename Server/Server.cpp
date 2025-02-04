@@ -16,8 +16,6 @@ class RequestProcessing {
 
     string request;
     string command;
-    path path_to;
-    bool invalid;
 
     string ToUpper(string word)const {
         transform(word.begin(), word.end(), word.begin(), ::toupper);
@@ -30,8 +28,29 @@ class RequestProcessing {
         ss >> command;
         return command;
     }
+  
+public:
+    RequestProcessing(const char* input): request(input){
+        command = ToUpper(GetCommandForConstructor());
+    }
 
-    const path GetPathForConstructor() {
+     int GetFileSize()const {
+        if (command != "PUT")return 0;
+        return stoi(request.substr(request.rfind(' ') + 1));;
+     }  
+
+     bool ConatinsInvalidPath(const path& p) const  {
+         if (!exists(p)) return true;
+         if (command == "REMOVE")  return !is_directory(p);
+         else return !is_regular_file(p);
+     }
+
+    const string GetCommand() const {
+        return command;
+    }
+
+    const path GetPath() {
+        if (command == "LIST")return "";
         bool is_put_command = (command == "PUT");
         int start_index = command.length() + 1;
         int index_end = is_put_command ? request.rfind(' ') : request.length();
@@ -41,42 +60,21 @@ class RequestProcessing {
         replace(file.begin(), file.end(), '\\', '/');
         return file;
     }
+};
 
-    bool IsInvalidPath() {
-        if (!exists(path_to)) return true;
-        if (command == "LIST" || command == "REMOVE")  return !is_directory(path_to);
-        else return !is_regular_file(path_to);
-    }
-
-public:
-    RequestProcessing(const char* input): request(input){
-        command = ToUpper(GetCommandForConstructor());
-        path_to = GetPathForConstructor();
-        invalid = IsInvalidPath();   
-    }
-
-     int GetFileSize()const {
-        int size = 0;
-        if (command == "PUT" && !invalid)size = stoi(request.substr(request.rfind(' ') + 1));
-        return size;
-     }  
-
-    bool isInValid()const {
-        return invalid;
-    }
-
-    const string GetCommand() const {
-        return command;
-    }
-
-    const path GetPath() const {
-        return path_to;
-    }
+struct Client {
+    const SOCKET socket;
+    char buffer_[CHUNK_SIZE];
+    const path folder;
+    Client(const SOCKET& socket, const string& name):socket(socket), folder(database /name){
+        memset(buffer_, 0, CHUNK_SIZE);
+        create_directory(folder);
+    } 
 };
 
 class ServedClient {
 
-    const SOCKET client_socket_;
+    Client client_;
 
     const string GetFilePermissions(const path& file)const {
         perms p = status(file).permissions();
@@ -97,41 +95,33 @@ class ServedClient {
         SendResponse(to_string(file_size(file_name)).c_str());
         char buffer_for_data[CHUNK_SIZE];
         while (file.read(buffer_for_data, sizeof(buffer_for_data))) {
-            send(client_socket_, buffer_for_data, (int)(file.gcount()), 0);
+            send(client_.socket, buffer_for_data, (int)(file.gcount()), 0);
         }
-        if (file.gcount() > 0)send(client_socket_, buffer_for_data, (int)(file.gcount()), 0);
+        if (file.gcount() > 0)send(client_.socket, buffer_for_data, (int)(file.gcount()), 0);
         file.close();
         SendResponse("File transfer completed!");
 
     }
 
-    void List(const path& dir_path)const {
-        if (is_directory(dir_path)) {
-            string list;
-            for (const auto& entry : directory_iterator(dir_path)) {
-                try {
-                    list.append(entry.path().string() + "\n");
-                }
-                catch (const exception& e) {
-                    SendResponse("Not possible to list contents of directory that contains cyryllic file/dir names.");
-                    return;
-                }
-            }
-            if (list.empty())SendResponse("The folder is empty!");
-            else if (list.back() == '\n') {
-                list.pop_back();
-                SendResponse(list.c_str());
-            }         
+    void List()const {
+        string list;
+        for (const auto& entry : directory_iterator(client_.folder)) {        
+            list.append(relative(entry.path(), client_.folder).string() + "\n");                    
         }
+        if (list.empty())SendResponse("The folder is empty!");
+        else if (list.back() == '\n') {
+            list.pop_back();
+            SendResponse(list.c_str());
+        }   
     }
 
     void Put(const path& file_path, int size)  {
-        path file_name = database /file_path.filename();
+        path file_name = client_.folder /file_path.filename();
         ofstream file(file_name, ios::binary);
         int i = 0;
         while (i != size) {
             int bytes_received = GetReadBytes();
-            file.write(buffer_, bytes_received);
+            file.write(client_.buffer_, bytes_received);
             i += bytes_received;
         }
         file.close();
@@ -160,57 +150,63 @@ class ServedClient {
     }  
 
 public:
-    char buffer_[CHUNK_SIZE];
 
-    ServedClient(const SOCKET& socket) :client_socket_(socket) {
-        memset(buffer_, 0, CHUNK_SIZE);
-    }
-
+    ServedClient(const SOCKET& client_socket, const string& name) :client_(client_socket, name) {}
+  
     const int GetReadBytes() {
-        memset(buffer_, 0, CHUNK_SIZE);
-        return recv(client_socket_, buffer_, sizeof(buffer_), 0);
+        memset(client_.buffer_, 0, CHUNK_SIZE);
+        return recv(client_.socket, client_.buffer_, sizeof(client_.buffer_), 0);
     }
 
     void SendResponse(const char* response)const {
-        send(client_socket_, response, (int)strlen(response), 0);
+        send(client_.socket, response, (int)strlen(response), 0);
         //cout << "\033[94m" << response << "\033[0m" << endl;
     }
 
+    const char* ReadBuffer() const {
+        return client_.buffer_;
+    }
+
     void ProcessRequest()  {
-        RequestProcessing request(buffer_);
-        if (request.isInValid()) {
-            SendResponse("Request denied.");
-            return;
-        }
-        string command = request.GetCommand();
-        path p = request.GetPath();
-       
-        if (command == "GET") Get(p);
-        else if (command == "LIST") List(p);
-        else if (command == "PUT") Put(p.filename(), request.GetFileSize());
-        else if (command == "INFO") GetFileInfo(p);
-        else if (command == "DELETE") DeleteFileSpecified(p);
-        else if (command == "REMOVE")RemoveFolder(p);
-        else  SendResponse("Request denied.");
+        RequestProcessing request(client_.buffer_);
+        const string command = request.GetCommand();
+        if (command == "LIST") List();
+        else if (command == "PUT")Put(request.GetPath().filename(), request.GetFileSize());
+        else {
+            const path p = client_.folder / request.GetPath();
+            if (request.ConatinsInvalidPath(p)) {
+                SendResponse("Request denied.");
+                return;
+            }
+            if (command == "GET") Get(p);
+            else if (command == "INFO") GetFileInfo(p);
+            else if (command == "DELETE") DeleteFileSpecified(p);
+            else RemoveFolder(p);
+        }    
     }
 };
 
-
-void HandleClient(int client_socket) {
-    ServedClient client_server(client_socket);
-    if (client_server.GetReadBytes() > 0) {
-        cout << "\033[95m" << client_server.buffer_ << "\033[0m" << endl;
-        client_server.SendResponse("Hello, client! This is the server.");
-    }
-    while (client_server.GetReadBytes() > 0) {
-        cout << "\033[95m" << client_server.buffer_ << "\033[94m" << endl;
-        client_server.ProcessRequest();
-    }
-    closesocket(client_socket);
-    cout << "\033[94mClient disconnected.\033[0m" << endl;
+string GetClientName(const string& hello) {
+    return hello.substr(hello.find_last_of(' ') + 1);
 }
 
-
+void HandleClient(const SOCKET& client_socket) {
+    char buffer[1024];
+    memset(buffer, 0, 1024);
+    int bytesReceived = recv(client_socket, buffer, sizeof(buffer), 0);
+    if (bytesReceived > 0) {
+        cout << "\033[95m" << buffer << "\033[0m" << endl;
+        string name = GetClientName(string(buffer, bytesReceived));
+        ServedClient client_server(client_socket, name);
+        client_server.SendResponse("Hello, client! This is the server.");
+        while (client_server.GetReadBytes() > 0) {
+            cout << "\033[95m" << client_server.ReadBuffer() << "\033[94m" << endl;
+            client_server.ProcessRequest();
+        }
+    }
+    cout << "\033[94mClient disconnected.\033[0m" << endl;
+    closesocket(client_socket);
+}
 
 int main()
 {

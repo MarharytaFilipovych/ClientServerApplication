@@ -115,7 +115,7 @@ struct Validation {
 		string command;
 		stringstream ss(input);
 		ss >> command;
-		return commands.find(ToUpper(command)) == commands.end() || input.length()<=command.length()+1;
+		return commands.find(ToUpper(command)) == commands.end() || (input.length()<=command.length()+1 && ToUpper(command) != "LIST");
 	}
 };
 const unordered_set<string> Validation::commands = { "GET", "LIST", "PUT", "INFO", "DELETE", "REMOVE"};
@@ -148,8 +148,12 @@ int main()
 		return 1;
 	}
 
+
 	Client client(client_socket);
-	client.SendMessageToServer("Hello, server! How are you?");
+	string client_name;
+	cout << "Enter client name (max length is 988 symbols): ";
+	getline(cin, client_name);
+	client.SendMessageToServer(("Hello, server! How are you? This is " + client_name).c_str());
 	client.OutputServerResponse();
 
 	string user_input;
