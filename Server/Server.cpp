@@ -34,11 +34,6 @@ public:
         command = ToUpper(GetCommandForConstructor());
     }
 
-     int GetFileSize()const {
-        if (command != "PUT")return 0;
-        return stoi(request.substr(request.rfind(' ') + 1));;
-     }  
-
      bool ConatinsInvalidPath(const path& p) const  {
          if (!exists(p)) return true;
          if (command == "REMOVE")  return !is_directory(p);
@@ -51,9 +46,8 @@ public:
 
     const path GetPath() {
         if (command == "LIST")return "";
-        bool is_put_command = (command == "PUT");
         int start_index = command.length() + 1;
-        int index_end = is_put_command ? request.rfind(' ') : request.length();
+        int index_end =request.length();
         string file;
         if (request[start_index] == '"' && request[index_end - 1] == '"')file = request.substr(start_index + 1, index_end - start_index - 2);
         else file = request.substr(start_index, index_end - start_index);
@@ -66,7 +60,8 @@ struct Client {
     const SOCKET socket;
     char buffer_[CHUNK_SIZE];
     const path folder;
-    Client(const SOCKET& socket, const string& name):socket(socket), folder(database /name){
+    const string name;
+    Client(const SOCKET& socket, const string& client_name):socket(socket), name(client_name), folder(database / client_name){
         memset(buffer_, 0, CHUNK_SIZE);
         create_directory(folder);
     } 
@@ -86,21 +81,19 @@ class ServedClient {
     }
 
     void Get(const path& file_name) const {
-        if (!is_regular_file(file_name)) {
-            SendResponse("The path specified is not a regular file!");
-            return;
-        }
         ifstream file(file_name, ios::binary);
-
-        SendResponse(to_string(file_size(file_name)).c_str());
+        int size = file_size(file_name);
+        send(client_.socket, (char*)(&size), sizeof(size), 0);
         char buffer_for_data[CHUNK_SIZE];
         while (file.read(buffer_for_data, sizeof(buffer_for_data))) {
             send(client_.socket, buffer_for_data, (int)(file.gcount()), 0);
         }
-        if (file.gcount() > 0)send(client_.socket, buffer_for_data, (int)(file.gcount()), 0);
+        int remaining_bytes = file.gcount();
+        if (remaining_bytes > 0) {
+            send(client_.socket, buffer_for_data, (int)remaining_bytes, 0);
+        }
         file.close();
         SendResponse("File transfer completed!");
-
     }
 
     void List()const {
@@ -115,11 +108,13 @@ class ServedClient {
         }   
     }
 
-    void Put(const path& file_path, int size)  {
-        path file_name = client_.folder /file_path.filename();
+    void Put(const path& file_path) {
+        int size_of_file;
+        recv(client_.socket, (char*)(&size_of_file), sizeof(size_of_file), 0);
+        path file_name = client_.folder / file_path.filename();
         ofstream file(file_name, ios::binary);
         int i = 0;
-        while (i != size) {
+        while (i != size_of_file) {
             int bytes_received = GetReadBytes();
             file.write(client_.buffer_, bytes_received);
             i += bytes_received;
@@ -166,16 +161,16 @@ public:
     const char* ReadBuffer() const {
         return client_.buffer_;
     }
-
+  
     void ProcessRequest()  {
         RequestProcessing request(client_.buffer_);
         const string command = request.GetCommand();
         if (command == "LIST") List();
-        else if (command == "PUT")Put(request.GetPath().filename(), request.GetFileSize());
+        else if (command == "PUT")Put(request.GetPath().filename());
         else {
             const path p = client_.folder / request.GetPath();
             if (request.ConatinsInvalidPath(p)) {
-                SendResponse("Request denied.");
+                SendResponse("Request denied. Specified file does not exist.");
                 return;
             }
             if (command == "GET") Get(p);
@@ -196,15 +191,17 @@ void HandleClient(const SOCKET& client_socket) {
     int bytesReceived = recv(client_socket, buffer, sizeof(buffer), 0);
     if (bytesReceived > 0) {
         cout << "\033[95m" << buffer << "\033[0m" << endl;
-        string name = GetClientName(string(buffer, bytesReceived));
-        ServedClient client_server(client_socket, name);
-        client_server.SendResponse("Hello, client! This is the server.");
-        while (client_server.GetReadBytes() > 0) {
-            cout << "\033[95m" << client_server.ReadBuffer() << "\033[94m" << endl;
-            client_server.ProcessRequest();
-        }
+        const char* hello = "Hello, client! This is the server.";
+        send(client_socket, hello, (int)strlen(hello), 0);    
     }
-    cout << "\033[94mClient disconnected.\033[0m" << endl;
+    string name = GetClientName(string(buffer, bytesReceived));
+    ServedClient client_server(client_socket, name);
+
+    while (client_server.GetReadBytes() > 0) {
+        cout << "\033[95m" << name << ": " << client_server.ReadBuffer() << "\033[94m" << endl;
+        client_server.ProcessRequest();
+    }
+    cout << "\033[94mClient " << name << " disconnected.\033[0m" << endl;
     closesocket(client_socket);
 }
 
