@@ -13,7 +13,7 @@ public enum Request {
         String command = userInput.split(" ")[0];
         return Arrays.stream(Request.values())
                 .noneMatch(request->request.name().equalsIgnoreCase(command))
-                || userInput.length()<=command.length()+1;
+                || (userInput.length()<=command.length()+1 && !command.equalsIgnoreCase("LIST"));
     }
 
 }

@@ -1,5 +1,7 @@
 import java.io.*;
 import java.net.Socket;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -34,30 +36,43 @@ public class Client {
         }
     }
 
-    public void get(Path filePath, int size){
-        Path fullPath = database.resolve(filePath.getFileName());
-        try(BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(new FileOutputStream(fullPath.toFile()), CHUNK)){
+    public void get(Path filePath){
+        try{
+            DataInputStream dataInputStream = new DataInputStream(socket.getInputStream());
+            byte[] bytes = new byte[4];
+            dataInputStream.readFully(bytes);
+            ByteBuffer sizeBuffer = ByteBuffer.wrap(bytes);
+            sizeBuffer.order(ByteOrder.LITTLE_ENDIAN);
+            int size = sizeBuffer.getInt();
+
+            Path fullPath = database.resolve(filePath.getFileName());
+            BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(new FileOutputStream(fullPath.toFile()), CHUNK);
             int i = 0;
             while(i < size){
-                 int bytesReceived = readBytes();
+                int bytesReceived = readBytes();
                 bufferedOutputStream.write(buffer, 0, bytesReceived);
                 i+=bytesReceived;
             }
-            outputServerResponse();
         }catch(IOException e){
             System.out.println("An error occurred while receiving the file: " + e.getMessage());
         }
     }
 
     public void put(Path filePath){
-        try(BufferedInputStream bufferedInputStream = new BufferedInputStream(new FileInputStream( filePath.toFile()), CHUNK)) {
+        try {
+            int fileSize = (int) Files.size(filePath);
+            ByteBuffer buffer = ByteBuffer.allocate(4);
+            buffer.order(ByteOrder.LITTLE_ENDIAN);
+            buffer.putInt(fileSize);
+            socket.getOutputStream().write(buffer.array());
+
+            BufferedInputStream bufferedInputStream = new BufferedInputStream(new FileInputStream( filePath.toFile()), CHUNK);
             int bytesRead;
             byte[] bufferForContent = new byte[CHUNK];
             while((bytesRead = bufferedInputStream.read(bufferForContent))!=-1){
                 socket.getOutputStream().write(bufferForContent, 0, bytesRead);
             }
             socket.getOutputStream().flush();
-            outputServerResponse();
         } catch (IOException e) {
             System.out.println("An error occurred while file sending.");
         }
@@ -67,7 +82,7 @@ public class Client {
         String file;
         if(filePart.charAt(0)=='"' && filePart.charAt(filePart.length()-1)=='"') file=filePart.substring(1, filePart.length()-1);
         else file = filePart;
-        return Paths.get(file.replace('\\', '/'));
+        return Paths.get(file);
     }
 
     public void sendMessage(String message){
@@ -84,7 +99,6 @@ public class Client {
             case DELETE:
             case REMOVE:
                 sendMessage(userInput);
-                outputServerResponse();
                 break;
             case PUT:
                 Path file = getFile(parts[1]);
@@ -93,8 +107,8 @@ public class Client {
                         System.out.println("Something wrong with the file!");
                         return;
                     }
-                    sendMessage(userInput + " " + Files.size(file));
-                    put(file);
+                    sendMessage(userInput);
+                    put(Paths.get(file.toString().replace('\\', '/')));
                 } catch (IOException e) {
                     System.out.println("Error processing PUT request: " + e.getMessage());
                     return;
@@ -102,18 +116,7 @@ public class Client {
                 break;
             case GET:
                 sendMessage(userInput);
-                try{
-                String response = getResponse(readBytes()).trim();
-                if(response.equals("Request denied.")) {
-                    System.out.println(response);
-                    return;
-                }
-                int size=Integer.parseInt(response.trim());
-                get(getFile(parts[1]), size);
-                } catch(IOException e){
-                    System.out.println("mError processing GET request: " + e.getMessage());
-                    return;
-                }
+                get(getFile(parts[1]));
                 break;
         }
     }
