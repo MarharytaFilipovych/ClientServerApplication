@@ -39,11 +39,9 @@ public class Client {
     public void get(Path filePath){
         try{
             DataInputStream dataInputStream = new DataInputStream(socket.getInputStream());
-            byte[] bytes = new byte[4];
-            dataInputStream.readFully(bytes);
-            ByteBuffer sizeBuffer = ByteBuffer.wrap(bytes);
-            sizeBuffer.order(ByteOrder.LITTLE_ENDIAN);
-            int size = sizeBuffer.getInt();
+
+            int size = dataInputStream.readInt();
+            System.out.println(size);
 
             Path fullPath = database.resolve(filePath.getFileName());
             BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(new FileOutputStream(fullPath.toFile()), CHUNK);
@@ -53,6 +51,7 @@ public class Client {
                 bufferedOutputStream.write(buffer, 0, bytesReceived);
                 i+=bytesReceived;
             }
+            outputServerResponse();
         }catch(IOException e){
             System.out.println("An error occurred while receiving the file: " + e.getMessage());
         }
@@ -61,11 +60,8 @@ public class Client {
     public void put(Path filePath){
         try {
             int fileSize = (int) Files.size(filePath);
-            ByteBuffer buffer = ByteBuffer.allocate(4);
-            buffer.order(ByteOrder.LITTLE_ENDIAN);
-            buffer.putInt(fileSize);
-            socket.getOutputStream().write(buffer.array());
-
+            DataOutputStream dataOutputStream = new DataOutputStream(socket.getOutputStream());
+            dataOutputStream.writeInt(fileSize);
             BufferedInputStream bufferedInputStream = new BufferedInputStream(new FileInputStream( filePath.toFile()), CHUNK);
             int bytesRead;
             byte[] bufferForContent = new byte[CHUNK];
@@ -73,6 +69,7 @@ public class Client {
                 socket.getOutputStream().write(bufferForContent, 0, bytesRead);
             }
             socket.getOutputStream().flush();
+           outputServerResponse();
         } catch (IOException e) {
             System.out.println("An error occurred while file sending.");
         }
@@ -99,6 +96,7 @@ public class Client {
             case DELETE:
             case REMOVE:
                 sendMessage(userInput);
+                outputServerResponse();
                 break;
             case PUT:
                 Path file = getFile(parts[1]);

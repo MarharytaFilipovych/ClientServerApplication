@@ -5,7 +5,6 @@
 #include <fstream>
 #include <sstream>
 #include <unordered_set>
-#include <mutex>
 #pragma comment(lib, "ws2_32.lib")
 #define CHUNK_SIZE 1024
 using namespace std;
@@ -24,6 +23,7 @@ class Client {
 	void Get(const path& file_path) {
 		int size_of_file;
 		recv(client_socket_, (char*)(&size_of_file), sizeof(size_of_file), 0);
+		size_of_file = ntohl(size_of_file);
 		path file_name = database / file_path.filename();
 		ofstream file(file_name, ios::binary);
 		int i = 0;
@@ -36,13 +36,13 @@ class Client {
 	}
 
 	void Put(const path& file_name) {
-		int size_of_file = file_size(file_name);
+		int size_of_file = htonl(file_size(file_name));
 		send(client_socket_, (char*)(&size_of_file), sizeof(size_of_file), 0);
 		ifstream file(file_name, ios::binary);
 		char buffer_for_data[CHUNK_SIZE];
 		while (file.read(buffer_for_data, sizeof(buffer_for_data))) {
 			send(client_socket_, buffer_for_data, (int)(file.gcount()), 0);
-		}
+		} 
 		if (file.gcount() > 0)send(client_socket_, buffer_for_data, (int)(file.gcount()), 0);
 		file.close();
 	}
@@ -85,7 +85,7 @@ public:
 				cout << "\033[95mSomething wrong with the file!" << endl;
 				return;
 			}
-			SendMessageToServer(user_input.c_str());
+			SendMessageToServer((user_input).c_str());
 			Put(file);
 		}	
 		else if (command == "GET") {
@@ -93,6 +93,8 @@ public:
 			Get(GetFileFromInput(user_input, command.length() + 1));
 		}
 		else SendMessageToServer(user_input.c_str());
+			
+		 
 	}
 };
 
@@ -109,7 +111,7 @@ struct Validation {
 		string command;
 		stringstream ss(input);
 		ss >> command;
-		return commands.find(ToUpper(command)) == commands.end() || (input.length()<=command.length()+1 && ToUpper(command) != "LIST");
+		return commands.find(ToUpper(command)) == commands.end() || input.length()<=command.length()+1;
 	}
 };
 const unordered_set<string> Validation::commands = { "GET", "LIST", "PUT", "INFO", "DELETE", "REMOVE"};
@@ -143,10 +145,7 @@ int main()
 	}
 
 	Client client(client_socket);
-	string client_name;
-	cout << "Enter client name (max length is 988 symbols): ";
-	getline(cin, client_name);
-	client.SendMessageToServer(("Hello, server! How are you? This is " + client_name).c_str());
+	client.SendMessageToServer("Hello, server! How are you?");
 	client.OutputServerResponse();
 
 	string user_input;
@@ -158,10 +157,10 @@ int main()
 		}
 		if (Validation::IsIncorrectRequest(user_input))cout << "\033[91mUndefined request.\033[95m" << endl; 
 		else if (user_input.length()> CHUNK_SIZE)cout << "\033[95The message length exceeds 1024 bytes, which is the maximum." << endl;
-		else {
+		else { 
 			client.ProcessRequest(user_input);
 			client.OutputServerResponse();
-		} 
+		};
 		getline(cin, user_input);
 	}
 
