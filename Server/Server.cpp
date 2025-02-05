@@ -6,11 +6,26 @@
 #include <filesystem>
 #include <vector>
 #include <thread>
+#include <mutex>
+#include <unordered_map>
 #pragma comment(lib, "ws2_32.lib")
 #define CHUNK_SIZE 1024
 using namespace std;
 using namespace filesystem;
 const path database = ".\\database";
+
+
+class Stats {
+    mutex m;
+    unordered_map<string, int> stats;
+public:
+    void ChangeMap(const string& command) {
+        lock_guard<mutex> lock(m);
+        stats[command]++;
+    }
+};
+
+Stats statistics;
 
 class RequestProcessing {
 
@@ -82,7 +97,7 @@ class ServedClient {
 
     void Get(const path& file_name) const {
         ifstream file(file_name, ios::binary);
-        int size = file_size(file_name);
+        int size = htonl(file_size(file_name));
         send(client_.socket, (char*)(&size), sizeof(size), 0);
         char buffer_for_data[CHUNK_SIZE];
         while (file.read(buffer_for_data, sizeof(buffer_for_data))) {
@@ -111,6 +126,8 @@ class ServedClient {
     void Put(const path& file_path) {
         int size_of_file;
         recv(client_.socket, (char*)(&size_of_file), sizeof(size_of_file), 0);
+        size_of_file = ntohl(size_of_file);
+
         path file_name = client_.folder / file_path.filename();
         ofstream file(file_name, ios::binary);
         int i = 0;
@@ -165,6 +182,7 @@ public:
     void ProcessRequest()  {
         RequestProcessing request(client_.buffer_);
         const string command = request.GetCommand();
+        statistics.ChangeMap(command);
         if (command == "LIST") List();
         else if (command == "PUT")Put(request.GetPath().filename());
         else {
@@ -182,6 +200,7 @@ public:
 };
 
 string GetClientName(const string& hello) {
+    if (hello == "Hello, server! How are you?")return "old_version";
     return hello.substr(hello.find_last_of(' ') + 1);
 }
 

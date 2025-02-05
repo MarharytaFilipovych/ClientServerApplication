@@ -23,6 +23,7 @@ class Client {
 	void Get(const path& file_path) {
 		int size_of_file;
 		recv(client_socket_, (char*)(&size_of_file), sizeof(size_of_file), 0);
+		size_of_file = ntohl(size_of_file);
 		path file_name = database / file_path.filename();
 		ofstream file(file_name, ios::binary);
 		int i = 0;
@@ -35,7 +36,7 @@ class Client {
 	}
 
 	void Put(const path& file_name) {
-		int size_of_file = file_size(file_name);
+		int size_of_file = htonl(file_size(file_name));
 		send(client_socket_, (char*)(&size_of_file), sizeof(size_of_file), 0);
 		ifstream file(file_name, ios::binary);
 		char buffer_for_data[CHUNK_SIZE];
