@@ -39,10 +39,7 @@ public class Client {
     public void get(Path filePath){
         try{
             DataInputStream dataInputStream = new DataInputStream(socket.getInputStream());
-
             int size = dataInputStream.readInt();
-            System.out.println(size);
-
             Path fullPath = database.resolve(filePath.getFileName());
             BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(new FileOutputStream(fullPath.toFile()), CHUNK);
             int i = 0;
