@@ -204,7 +204,10 @@ public:
                 SendResponse("Request denied. Specified file does not exist.");
                 return;
             }
-            if (command == "GET") Get(p);
+            if (command == "GET") {
+                SendResponse("OK");
+                Get(p); 
+            }
             else if (command == "INFO") GetFileInfo(p);
             else if (command == "DELETE") DeleteFileSpecified(p);
             else RemoveFolder(p);

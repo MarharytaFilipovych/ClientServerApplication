@@ -38,6 +38,11 @@ public class Client {
 
     public void get(Path filePath){
         try{
+            String response = getResponse(readBytes());
+            if(!response.equals("OK")){
+                System.out.println(response);
+                return;
+            }
             DataInputStream dataInputStream = new DataInputStream(socket.getInputStream());
             int size = dataInputStream.readInt();
             Path fullPath = database.resolve(filePath.getFileName());

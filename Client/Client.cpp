@@ -10,6 +10,10 @@
 using namespace std;
 using namespace filesystem;
 const path database = ".\\database";
+string ToUpper(string input) {
+	transform(input.begin(), input.end(), input.begin(), ::toupper);
+	return input;
+}
 
 class Client {
 	char buffer_[CHUNK_SIZE];
@@ -21,6 +25,10 @@ class Client {
 	}
 
 	void Get(const path& file_path) {
+		if (GetReadBytes() > 0 && string(buffer_) != "OK") {
+			cout << "\033[94m" <<buffer_ << "\033[95m" << endl;
+			return;
+		}
 		int size_of_file;
 		recv(client_socket_, (char*)(&size_of_file), sizeof(size_of_file), 0);
 		size_of_file = ntohl(size_of_file);
@@ -79,7 +87,7 @@ public:
 
 	void ProcessRequest(string& user_input) {
 		string command = GetCommand(user_input);
-		if (command == "PUT") {
+		if (ToUpper(command) == "PUT") {
 			path file = GetFileFromInput(user_input, command.length() + 1);
 			if (!is_regular_file(file) || !exists(file) || file_size(file) == 0) {
 				cout << "\033[95mSomething wrong with the file!" << endl;
@@ -88,7 +96,7 @@ public:
 			SendMessageToServer(user_input.c_str());
 			Put(file);
 		}	
-		else if (command == "GET") {
+		else if (ToUpper(command) == "GET") {
 			SendMessageToServer(user_input.c_str());
 			Get(GetFileFromInput(user_input, command.length() + 1));
 		}
@@ -99,10 +107,7 @@ public:
 struct Validation {
 	static const unordered_set<string> commands;
 
-	static string ToUpper(string input) {
-		 transform(input.begin(), input.end(), input.begin(), ::toupper);
-		 return input;
-	}
+	
 
 	static bool IsIncorrectRequest(string& input) {
 		if (input.empty())return false;
@@ -153,7 +158,7 @@ int main()
 	string user_input;
 	getline(cin, user_input);
 	while (true) {
-		if (Validation::ToUpper(user_input) == "EXIT") {
+		if (ToUpper(user_input) == "EXIT") {
 			client.SendMessageToServer("\033[91mClient decided to terminate the connection.\033[0m");
 			break;
 		}
