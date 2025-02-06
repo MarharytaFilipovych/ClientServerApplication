@@ -24,6 +24,10 @@ class Client {
 	}
 
 	void Get(const path& file_path) {
+		if (GetReadBytes() > 0 && string(buffer_) != "OK") {
+			cout << "\033[94m" << buffer_ << "\033[95m" << endl;
+			return;
+		}
 		int size_of_file;
 		recv(client_socket_, (char*)(&size_of_file), sizeof(size_of_file), 0);
 		size_of_file = ntohl(size_of_file);
