@@ -10,7 +10,10 @@
 using namespace std;
 using namespace filesystem;
 const path database = ".\\database";
-
+ string ToUpper(string input) {
+	transform(input.begin(), input.end(), input.begin(), ::toupper);
+	return input;
+}
 class Client {
 	char buffer_[CHUNK_SIZE];
 	const SOCKET client_socket_;
@@ -78,7 +81,7 @@ public:
 	}
 
 	void ProcessRequest(string& user_input) {
-		string command = GetCommand(user_input);
+		string command = ToUpper(GetCommand(user_input));
 		if (command == "PUT") {
 			path file = GetFileFromInput(user_input, command.length() + 1);
 			if (!is_regular_file(file) || !exists(file) || file_size(file) == 0) {
@@ -101,10 +104,7 @@ public:
 struct Validation {
 	static const unordered_set<string> commands;
 
-	static string ToUpper(string input) {
-		 transform(input.begin(), input.end(), input.begin(), ::toupper);
-		 return input;
-	}
+	
 
 	static bool IsIncorrectRequest(string& input) {
 		if (input.empty())return false;
@@ -151,7 +151,7 @@ int main()
 	string user_input;
 	getline(cin, user_input);
 	while (true) {
-		if (Validation::ToUpper(user_input) == "EXIT") {
+		if (ToUpper(user_input) == "EXIT") {
 			client.SendMessageToServer("\033[91mClient decided to terminate the connection.\033[0m");
 			break;
 		}
