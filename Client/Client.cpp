@@ -10,6 +10,7 @@
 using namespace std;
 using namespace filesystem;
 const path database = ".\\database";
+
 string ToUpper(string input) {
 	transform(input.begin(), input.end(), input.begin(), ::toupper);
 	return input;
