@@ -82,10 +82,7 @@ class Server {
 
     void Get(const path& file_name) const {
         ifstream file(file_name, ios::binary);
-        cout << file_size(file_name) << endl;
-
         int size = htonl(file_size(file_name));
-        cout << size << endl;
         send(client_socket_, (char*)(&size), sizeof(size), 0);
         char buffer_for_data[CHUNK_SIZE];
         while (file.read(buffer_for_data, sizeof(buffer_for_data))) {
