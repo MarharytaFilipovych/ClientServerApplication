@@ -13,15 +13,28 @@
 using namespace std;
 using namespace filesystem;
 const path database = ".\\database";
+mutex console;
 
 
 class Stats {
     mutex m;
     unordered_map<string, int> stats;
 public:
+    bool stop;
     void ChangeMap(const string& command) {
         lock_guard<mutex> lock(m);
         stats[command]++;
+    }
+
+    void outPutStats() {
+        this_thread::sleep_for(chrono::minutes(1));
+        while (!stop) {
+            this_thread::sleep_for(chrono::minutes(1));
+            for (auto& record : stats) {
+                lock_guard<mutex> lock1(console);
+                cout << "\033[92mCommand " << "\033[36m" << record.first << "\033[92m was called " << "\033[36m " << record.second << "\033[92m times\033[94m" << endl;
+            }
+        }
     }
 };
 
@@ -204,12 +217,18 @@ string GetClientName(const string& hello) {
     return hello.substr(hello.find_last_of(' ') + 1);
 }
 
+
+
+
 void HandleClient(const SOCKET& client_socket) {
     char buffer[1024];
     memset(buffer, 0, 1024);
     int bytesReceived = recv(client_socket, buffer, sizeof(buffer), 0);
     if (bytesReceived > 0) {
-        cout << "\033[95m" << buffer << "\033[0m" << endl;
+        {
+            lock_guard<mutex> lock1(console);
+            cout << "\033[95m" << buffer << "\033[0m" << endl;
+        }
         const char* hello = "Hello, client! This is the server.";
         send(client_socket, hello, (int)strlen(hello), 0);    
     }
@@ -217,11 +236,15 @@ void HandleClient(const SOCKET& client_socket) {
     ServedClient client_server(client_socket, name);
 
     while (client_server.GetReadBytes() > 0) {
-        cout << "\033[95m" << name << ": " << client_server.ReadBuffer() << "\033[94m" << endl;
+        {
+            lock_guard<mutex> lock1(console);
+            cout << "\033[94m" << name << ": " << client_server.ReadBuffer() << "\033[94m" << endl;
+        }
         client_server.ProcessRequest();
     }
-    cout << "\033[94mClient " << name << " disconnected.\033[0m" << endl;
     closesocket(client_socket);
+    lock_guard<mutex> lock1(console);
+    cout << "\033[94mClient " << name << " disconnected.\033[0m" << endl;
 }
 
 int main()
@@ -263,6 +286,7 @@ int main()
 
     cout << "\033[94mServer listening on port " << port << "\033[0m" << endl;
 
+    thread statistic_displayer = thread(&Stats::outPutStats, &statistics);
     while (true) {
         SOCKET client_socket = accept(server_socket, nullptr, nullptr);
         if (client_socket == INVALID_SOCKET) {
@@ -274,7 +298,8 @@ int main()
         threads.emplace_back(HandleClient, client_socket);
         threads.back().detach();
     }
-        
+    statistics.stop = true;
+    statistic_displayer.join();
     closesocket(server_socket);
     WSACleanup();
     return 0; 
