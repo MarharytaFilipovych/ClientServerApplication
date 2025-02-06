@@ -81,6 +81,7 @@ class Server {
     }
 
     void Get(const path& file_name) const {
+        SendResponse("OK");
         ifstream file(file_name, ios::binary);
         int size = htonl(file_size(file_name));
         send(client_socket_, (char*)(&size), sizeof(size), 0);
