@@ -6,11 +6,11 @@ public class Main {
     public static void main(String[] args) {
         try {
             Socket socket = new Socket("localhost", 12345);
-            Client client = new Client(socket);
             Scanner scanner = new Scanner(System.in);
 
             System.out.print("Enter client name (max length is 988 symbols): ");
             String name = scanner.nextLine();
+            Client client = new Client(socket, name);
             client.sendMessage("Hello, server! How are you? This is " + name);
             client.outputServerResponse();
 

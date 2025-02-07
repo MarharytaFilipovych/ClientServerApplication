@@ -1,7 +1,5 @@
 import java.io.*;
 import java.net.Socket;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -11,11 +9,12 @@ public class Client {
     final private byte[] buffer = new byte[CHUNK];
     final private Socket socket;
     private final PrintWriter out;
-    private final Path database = Paths.get("./database");
+    private final Path folder;
 
-    public Client(Socket socket) throws IOException {
+    public Client(Socket socket, String name) throws IOException {
         this.socket = socket;
         out = new PrintWriter(socket.getOutputStream(), true);
+        folder = Paths.get("./database").resolve(name);
     }
 
     private int readBytes()throws IOException{
@@ -45,7 +44,7 @@ public class Client {
             }
             DataInputStream dataInputStream = new DataInputStream(socket.getInputStream());
             int size = dataInputStream.readInt();
-            Path fullPath = database.resolve(filePath.getFileName());
+            Path fullPath = folder.resolve(filePath.getFileName());
             BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(new FileOutputStream(fullPath.toFile()), CHUNK);
             int i = 0;
             while(i < size){

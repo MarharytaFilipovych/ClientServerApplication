@@ -42,6 +42,8 @@ class Client {
 			i += bytes_received;
 		}
 		file.close();
+		OutputServerResponse();
+
 	}
 
 	void Put(const path& file_name) {
@@ -54,6 +56,8 @@ class Client {
 		}
 		if (file.gcount() > 0)send(client_socket_, buffer_for_data, (int)(file.gcount()), 0);
 		file.close();
+		OutputServerResponse();
+
 	}
 
 	const path GetFileFromInput(string& input, int index) const{
@@ -101,15 +105,15 @@ public:
 			SendMessageToServer(user_input.c_str());
 			Get(GetFileFromInput(user_input, command.length() + 1));
 		}
-		else SendMessageToServer(user_input.c_str());
+		else {
+			SendMessageToServer(user_input.c_str());
+		}
+		
 	}
 };
 
 struct Validation {
 	static const unordered_set<string> commands;
-
-	
-
 	static bool IsIncorrectRequest(string& input) {
 		if (input.empty())return false;
 		string command;
@@ -165,10 +169,7 @@ int main()
 		}
 		if (Validation::IsIncorrectRequest(user_input))cout << "\033[91mUndefined request.\033[95m" << endl; 
 		else if (user_input.length()> CHUNK_SIZE)cout << "\033[95The message length exceeds 1024 bytes, which is the maximum." << endl;
-		else {
-			client.ProcessRequest(user_input);
-			client.OutputServerResponse();
-		} 
+		else client.ProcessRequest(user_input);
 		getline(cin, user_input);
 	}
 

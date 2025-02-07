@@ -8,12 +8,15 @@
 #include <thread>
 #include <mutex>
 #include <unordered_map>
+#include <atomic>
 #pragma comment(lib, "ws2_32.lib")
 #define CHUNK_SIZE 1024
+#define MAX_CLIENTS 20
 using namespace std;
 using namespace filesystem;
 const path database = ".\\database";
 mutex console;
+atomic<int> active_clients(0);
 
 
 class Stats {
@@ -214,30 +217,39 @@ public:
         }    
     }
 };
+bool IsOldClient(const string& hello) {
+    return hello == "Hello, server! How are you?";
+}
 
 string GetClientName(const string& hello) {
-    if (hello == "Hello, server! How are you?")return "old_version";
+    if (IsOldClient(hello))return "old_version";
     return hello.substr(hello.find_last_of(' ') + 1);
 }
 
-
+void CloseClient(const SOCKET& client_socket, const string& name) {
+    closesocket(client_socket);
+    active_clients--;
+    lock_guard<mutex> lock1(console);
+    cout << "\033[94mClient " << name << " disconnected.\033[0m" << endl;
+}
 
 
 void HandleClient(const SOCKET& client_socket) {
     char buffer[1024];
     memset(buffer, 0, 1024);
+    string name, hello;
     int bytesReceived = recv(client_socket, buffer, sizeof(buffer), 0);
     if (bytesReceived > 0) {
         {
             lock_guard<mutex> lock1(console);
             cout << "\033[95m" << buffer << "\033[0m" << endl;
         }
-        const char* hello = "Hello, client! This is the server.";
-        send(client_socket, hello, (int)strlen(hello), 0);    
+        string got_message = string(buffer, bytesReceived);
+        name = GetClientName(got_message);
+        IsOldClient(got_message) ?  hello = "Hello, client! This is the server.": hello = "Hello, " + name + "! This is the server.";
+        send(client_socket, hello.c_str(), (int)strlen(hello.c_str()), 0);
     }
-    string name = GetClientName(string(buffer, bytesReceived));
     ServedClient client_server(client_socket, name);
-
     while (client_server.GetReadBytes() > 0) {
         {
             lock_guard<mutex> lock1(console);
@@ -245,9 +257,7 @@ void HandleClient(const SOCKET& client_socket) {
         }
         client_server.ProcessRequest();
     }
-    closesocket(client_socket);
-    lock_guard<mutex> lock1(console);
-    cout << "\033[94mClient " << name << " disconnected.\033[0m" << endl;
+    CloseClient(client_socket, name);
 }
 
 int main()
@@ -291,15 +301,18 @@ int main()
 
     thread statistic_displayer = thread(&Stats::outPutStats, &statistics);
     while (true) {
-        SOCKET client_socket = accept(server_socket, nullptr, nullptr);
-        if (client_socket == INVALID_SOCKET) {
-            cerr << "\033[95mAccept failed with error: " << WSAGetLastError() << "\033[0m" << endl;
-            closesocket(server_socket);
-            WSACleanup();
-            continue;
+        if (active_clients.load() <= MAX_CLIENTS) {
+            SOCKET client_socket = accept(server_socket, nullptr, nullptr);
+            if (client_socket == INVALID_SOCKET) {
+                cerr << "\033[95mAccept failed with error: " << WSAGetLastError() << "\033[0m" << endl;
+                closesocket(server_socket);
+                WSACleanup();
+                continue;
+            }
+            active_clients++;
+            threads.emplace_back(HandleClient, client_socket);
+            threads.back().detach();
         }
-        threads.emplace_back(HandleClient, client_socket);
-        threads.back().detach();
     }
     statistics.stop = true;
     statistic_displayer.join();
