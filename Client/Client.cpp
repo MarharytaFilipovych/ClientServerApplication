@@ -19,7 +19,6 @@ string ToUpper(string input) {
 class Client {
 	char buffer_[CHUNK_SIZE];
 	const SOCKET client_socket_;
-	const path folder;
 
 	const int GetReadBytes() {
 		memset(buffer_, 0, CHUNK_SIZE);
@@ -34,7 +33,7 @@ class Client {
 		int size_of_file;
 		recv(client_socket_, (char*)(&size_of_file), sizeof(size_of_file), 0);
 		size_of_file = ntohl(size_of_file);
-		path file_name = folder /file_path.filename();
+		path file_name = database /file_path.filename();
 		ofstream file(file_name, ios::binary);
 		int i = 0;
 		while (i != size_of_file) {
@@ -79,9 +78,8 @@ class Client {
 
 public:
 
-	Client(const SOCKET& socket, const string& name) : client_socket_(socket), folder(database / name) {
+	Client(const SOCKET& socket) : client_socket_(socket) {
 		memset(buffer_, 0, CHUNK_SIZE);
-		create_directory(folder);
 	}
 
 	void OutputServerResponse() {
@@ -93,8 +91,8 @@ public:
 	}
 
 	void ProcessRequest(string& user_input) {
-		string command = GetCommand(user_input);
-		if (ToUpper(command) == "PUT") {
+		string command = ToUpper(GetCommand(user_input));
+		if (command == "PUT") {
 			path file = GetFileFromInput(user_input, command.length() + 1);
 			if (!is_regular_file(file) || !exists(file) || file_size(file) == 0) {
 				cout << "\033[95mSomething wrong with the file!" << endl;
@@ -103,12 +101,13 @@ public:
 			SendMessageToServer(user_input.c_str());
 			Put(file);
 		}	
-		else if (ToUpper(command) == "GET") {
+		else if (command == "GET") {
 			SendMessageToServer(user_input.c_str());
 			Get(GetFileFromInput(user_input, command.length() + 1));
 		}
 		else {
 			SendMessageToServer(user_input.c_str());
+			OutputServerResponse();
 		}
 		
 	}
@@ -147,6 +146,8 @@ int main()
 	server_addr.sin_family = AF_INET;
 	server_addr.sin_port = htons(port);
 	InetPton(AF_INET, server_ip, &server_addr.sin_addr);
+
+	
 	if (connect(client_socket, reinterpret_cast<sockaddr*>(&server_addr), sizeof(server_addr)) == SOCKET_ERROR) {
 		cerr << "Connect failed with error: " << WSAGetLastError() << endl;
 		closesocket(client_socket);
@@ -154,12 +155,12 @@ int main()
 		return 1;
 	}
 
-
 	string client_name;
 	cout << "Enter client name (max length is 988 symbols): ";
 	getline(cin, client_name);
-	Client client(client_socket, client_name);
+	Client client(client_socket);
 	client.SendMessageToServer(("Hello, server! How are you? This is " + client_name).c_str());
+	cout << "Waiting for a server to accept us..." << endl;
 	client.OutputServerResponse();
 
 	string user_input;

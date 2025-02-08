@@ -11,7 +11,7 @@
 #include <atomic>
 #pragma comment(lib, "ws2_32.lib")
 #define CHUNK_SIZE 1024
-#define MAX_CLIENTS 20
+#define MAX_CLIENTS 2
 using namespace std;
 using namespace filesystem;
 const path database = ".\\database";
@@ -23,11 +23,12 @@ class Stats {
     unordered_map<string, int> stats_;
     void Print() {
         lock_guard<mutex> lock1(console);
+        cout << "\033[91m" << string(40, '-') << "\033[0m<<" << endl;
         for (auto& record : stats_) {
-            cout << "\033[91m" << string(40, '-') << "\033[0m<<"<< endl;
-            cout << "\033[92mCommand " << "\033[36m" << record.first << "\033[92m was called " << "\033[36m " << record.second << "\033[92mtimes\033[94m" << endl;
-            cout << "\033[91m" << string(40, '-') << "\033[0m<<" << endl;
+            cout << "\033[92mCommand " << "\033[36m" << record.first << "\033[92m was called" << "\033[36m " << record.second << "\033[92m times\033[94m" << endl;
         }
+        cout << "\033[92m" << "Active clients: " << active_clients << "\033[0m" << endl;
+        cout << "\033[91m" << string(40, '-') << "\033[0m" << endl;
     }
 public:
     bool stop_;
@@ -305,7 +306,7 @@ int main()
 
     thread statistic_displayer = thread(&Stats::OutPutStats, &statistics);
     while (true) {
-        if (active_clients.load() <= MAX_CLIENTS) {
+        if (active_clients.load() < MAX_CLIENTS) {
             SOCKET client_socket = accept(server_socket, nullptr, nullptr);
             if (client_socket == INVALID_SOCKET) {
                 cerr << "\033[95mAccept failed with error: " << WSAGetLastError() << "\033[0m" << endl;
