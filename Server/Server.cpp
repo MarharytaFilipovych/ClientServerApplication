@@ -96,10 +96,9 @@ struct Client {
     const SOCKET socket_;
     char buffer_[CHUNK_SIZE];
     const path folder_;
-    const string name_;
-    Client(const SOCKET& socket, const string& client_name):socket_(socket), name_(client_name), folder_(database / client_name){
+    Client(const SOCKET& socket, const string& client_name):socket_(socket), folder_(database / client_name){
         memset(buffer_, 0, CHUNK_SIZE);
-        create_directory(folder_);
+        if(!exists(folder_))create_directory(folder_);
     } 
 };
 
@@ -162,10 +161,6 @@ class ServedClient {
     }
 
     void GetFileInfo(const path& file)const {
-        if (!is_regular_file(file)) {
-            SendResponse("Request denied.");
-            return;
-        }
         string size = to_string(file_size(file));
         string time = format("Last modified: {}", last_write_time(file));
         string path = absolute(file).string();
@@ -209,7 +204,7 @@ public:
         else {
             const path p = client_.folder_ / request.GetPath().filename();
             if (request.ConatinsInvalidPath(p)) {
-                SendResponse("Request denied. Specified file does not exist.");
+                SendResponse("Request denied. Specified path does not exist.");
                 return;
             }
             if (command == "GET") {
