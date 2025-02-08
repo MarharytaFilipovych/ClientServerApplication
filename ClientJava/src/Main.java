@@ -10,7 +10,7 @@ public class Main {
 
             System.out.print("Enter client name (max length is 988 symbols): ");
             String name = scanner.nextLine();
-            Client client = new Client(socket, name);
+            Client client = new Client(socket);
             client.sendMessage("Hello, server! How are you? This is " + name);
             client.outputServerResponse();
 

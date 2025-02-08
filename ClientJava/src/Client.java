@@ -11,10 +11,10 @@ public class Client {
     private final PrintWriter out;
     private final Path folder;
 
-    public Client(Socket socket, String name) throws IOException {
+    public Client(Socket socket) throws IOException {
         this.socket = socket;
         out = new PrintWriter(socket.getOutputStream(), true);
-        folder = Paths.get("./database").resolve(name);
+        folder = Paths.get("./database");
     }
 
     private int readBytes()throws IOException{
