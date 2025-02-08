@@ -11,7 +11,7 @@ public class Client {
     final private byte[] buffer = new byte[CHUNK];
     final private Socket socket;
     private final PrintWriter out;
-    private final Path database = Paths.get("./database");
+    private final Path database = Paths.get("./database/old_version");
 
     public Client(Socket socket) throws IOException {
         this.socket = socket;

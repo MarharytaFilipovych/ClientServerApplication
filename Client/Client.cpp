@@ -9,7 +9,7 @@
 #define CHUNK_SIZE 1024
 using namespace std;
 using namespace filesystem;
-const path database = ".\\database";
+const path database = ".\\database\\old_version";
  string ToUpper(string input) {
 	transform(input.begin(), input.end(), input.begin(), ::toupper);
 	return input;
