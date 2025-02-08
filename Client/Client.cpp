@@ -19,6 +19,7 @@ string ToUpper(string input) {
 class Client {
 	char buffer_[CHUNK_SIZE];
 	const SOCKET client_socket_;
+	const path folder;
 
 	const int GetReadBytes() {
 		memset(buffer_, 0, CHUNK_SIZE);
@@ -33,7 +34,7 @@ class Client {
 		int size_of_file;
 		recv(client_socket_, (char*)(&size_of_file), sizeof(size_of_file), 0);
 		size_of_file = ntohl(size_of_file);
-		path file_name = database / file_path.filename();
+		path file_name = folder /file_path.filename();
 		ofstream file(file_name, ios::binary);
 		int i = 0;
 		while (i != size_of_file) {
@@ -78,8 +79,9 @@ class Client {
 
 public:
 
-	Client(const SOCKET& socket) : client_socket_(socket) {
+	Client(const SOCKET& socket, const string& name) : client_socket_(socket), folder(database / name) {
 		memset(buffer_, 0, CHUNK_SIZE);
+		create_directory(folder);
 	}
 
 	void OutputServerResponse() {
@@ -153,10 +155,10 @@ int main()
 	}
 
 
-	Client client(client_socket);
 	string client_name;
 	cout << "Enter client name (max length is 988 symbols): ";
 	getline(cin, client_name);
+	Client client(client_socket, client_name);
 	client.SendMessageToServer(("Hello, server! How are you? This is " + client_name).c_str());
 	client.OutputServerResponse();
 

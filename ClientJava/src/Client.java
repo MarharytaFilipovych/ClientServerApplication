@@ -79,7 +79,7 @@ public class Client {
 
     private Path getFile(String filePart){
         String file;
-        if(filePart.charAt(0)=='"' && filePart.charAt(filePart.length()-1)=='"') file=filePart.substring(1, filePart.length()-1);
+        if((filePart.startsWith("\"")  || filePart.startsWith("“"))&& (filePart.endsWith("\"")  || filePart.endsWith("”")))file=filePart.substring(1, filePart.length()-1);
         else file = filePart;
         return Paths.get(file);
     }

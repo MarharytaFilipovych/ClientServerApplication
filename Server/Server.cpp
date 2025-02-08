@@ -18,25 +18,29 @@ const path database = ".\\database";
 mutex console;
 atomic<int> active_clients(0);
 
-
 class Stats {
-    mutex m;
-    unordered_map<string, int> stats;
+    mutex m_;
+    unordered_map<string, int> stats_;
+    void Print() {
+        lock_guard<mutex> lock1(console);
+        for (auto& record : stats_) {
+            cout << "\033[91m-----------------------------------------------------------------------------------------------------------------------------------------------------\033[91m" << endl;
+            cout << "\033[92mCommand " << "\033[36m" << record.first << "\033[92m was called " << "\033[36m " << record.second << "\033[92m times\033[94m" << endl;
+            cout << "\033[91m-----------------------------------------------------------------------------------------------------------------------------------------------------\033[91m" << endl;
+        }
+    }
 public:
-    bool stop;
+    bool stop_;
     void ChangeMap(const string& command) {
-        lock_guard<mutex> lock(m);
-        stats[command]++;
+        lock_guard<mutex> lock(m_);
+        stats_[command]++;
     }
 
-    void outPutStats() {
+    void OutPutStats() {
         this_thread::sleep_for(chrono::minutes(1));
-        while (!stop) {
+        while (!stop_) {
             this_thread::sleep_for(chrono::minutes(1));
-            for (auto& record : stats) {
-                lock_guard<mutex> lock1(console);
-                cout << "\033[92mCommand " << "\033[36m" << record.first << "\033[92m was called " << "\033[36m " << record.second << "\033[92m times\033[94m" << endl;
-            }
+            Print();
         }
     }
 };
@@ -45,8 +49,8 @@ Stats statistics;
 
 class RequestProcessing {
 
-    string request;
-    string command;
+    string request_;
+    string command_;
 
     string ToUpper(string word)const {
         transform(word.begin(), word.end(), word.begin(), ::toupper);
@@ -55,46 +59,46 @@ class RequestProcessing {
 
     string GetCommandForConstructor() {
         string command;
-        stringstream ss(request);
+        stringstream ss(request_);
         ss >> command;
         return command;
     }
   
 public:
-    RequestProcessing(const char* input): request(input){
-        command = ToUpper(GetCommandForConstructor());
+    RequestProcessing(const char* input): request_(input){
+        command_ = ToUpper(GetCommandForConstructor());
     }
 
      bool ConatinsInvalidPath(const path& p) const  {
          if (!exists(p)) return true;
-         if (command == "REMOVE")  return !is_directory(p);
+         if (command_ == "REMOVE")  return !is_directory(p);
          else return !is_regular_file(p);
      }
 
     const string GetCommand() const {
-        return command;
+        return command_;
     }
 
     const path GetPath() {
-        if (command == "LIST")return "";
-        int start_index = command.length() + 1;
-        int index_end =request.length();
+        if (command_ == "LIST")return "";
+        int start_index = command_.length() + 1;
+        int index_end =request_.length();
         string file;
-        if (request[start_index] == '"' && request[index_end - 1] == '"')file = request.substr(start_index + 1, index_end - start_index - 2);
-        else file = request.substr(start_index, index_end - start_index);
+        if (request_[start_index] == '"' && request_[index_end - 1] == '"')file = request_.substr(start_index + 1, index_end - start_index - 2);
+        else file = request_.substr(start_index, index_end - start_index);
         replace(file.begin(), file.end(), '\\', '/');
         return file;
     }
 };
 
 struct Client {
-    const SOCKET socket;
+    const SOCKET socket_;
     char buffer_[CHUNK_SIZE];
-    const path folder;
-    const string name;
-    Client(const SOCKET& socket, const string& client_name):socket(socket), name(client_name), folder(database / client_name){
+    const path folder_;
+    const string name_;
+    Client(const SOCKET& socket, const string& client_name):socket_(socket), name_(client_name), folder_(database / client_name){
         memset(buffer_, 0, CHUNK_SIZE);
-        create_directory(folder);
+        create_directory(folder_);
     } 
 };
 
@@ -114,14 +118,14 @@ class ServedClient {
     void Get(const path& file_name) const {
         ifstream file(file_name, ios::binary);
         int size = htonl(file_size(file_name));
-        send(client_.socket, (char*)(&size), sizeof(size), 0);
+        send(client_.socket_, (char*)(&size), sizeof(size), 0);
         char buffer_for_data[CHUNK_SIZE];
         while (file.read(buffer_for_data, sizeof(buffer_for_data))) {
-            send(client_.socket, buffer_for_data, (int)(file.gcount()), 0);
+            send(client_.socket_, buffer_for_data, (int)(file.gcount()), 0);
         }
         int remaining_bytes = file.gcount();
         if (remaining_bytes > 0) {
-            send(client_.socket, buffer_for_data, (int)remaining_bytes, 0);
+            send(client_.socket_, buffer_for_data, (int)remaining_bytes, 0);
         }
         file.close();
         SendResponse("File transfer completed!");
@@ -129,8 +133,8 @@ class ServedClient {
 
     void List()const {
         string list;
-        for (const auto& entry : directory_iterator(client_.folder)) {        
-            list.append(relative(entry.path(), client_.folder).string() + "\n");                    
+        for (const auto& entry : directory_iterator(client_.folder_)) {        
+            list.append(relative(entry.path(), client_.folder_).string() + "\n");                    
         }
         if (list.empty())SendResponse("The folder is empty!");
         else if (list.back() == '\n') {
@@ -141,10 +145,10 @@ class ServedClient {
 
     void Put(const path& file_path) {
         int size_of_file;
-        recv(client_.socket, (char*)(&size_of_file), sizeof(size_of_file), 0);
+        recv(client_.socket_, (char*)(&size_of_file), sizeof(size_of_file), 0);
         size_of_file = ntohl(size_of_file);
 
-        path file_name = client_.folder / file_path.filename();
+        path file_name = client_.folder_ / file_path.filename();
         ofstream file(file_name, ios::binary);
         int i = 0;
         while (i != size_of_file) {
@@ -183,11 +187,11 @@ public:
   
     const int GetReadBytes() {
         memset(client_.buffer_, 0, CHUNK_SIZE);
-        return recv(client_.socket, client_.buffer_, sizeof(client_.buffer_), 0);
+        return recv(client_.socket_, client_.buffer_, sizeof(client_.buffer_), 0);
     }
 
     void SendResponse(const char* response)const {
-        send(client_.socket, response, (int)strlen(response), 0);
+        send(client_.socket_, response, (int)strlen(response), 0);
         //cout << "\033[94m" << response << "\033[0m" << endl;
     }
 
@@ -202,7 +206,7 @@ public:
         if (command == "LIST") List();
         else if (command == "PUT")Put(request.GetPath().filename());
         else {
-            const path p = client_.folder / request.GetPath();
+            const path p = client_.folder_ / request.GetPath();
             if (request.ConatinsInvalidPath(p)) {
                 SendResponse("Request denied. Specified file does not exist.");
                 return;
@@ -299,7 +303,7 @@ int main()
 
     cout << "\033[94mServer listening on port " << port << "\033[0m" << endl;
 
-    thread statistic_displayer = thread(&Stats::outPutStats, &statistics);
+    thread statistic_displayer = thread(&Stats::OutPutStats, &statistics);
     while (true) {
         if (active_clients.load() <= MAX_CLIENTS) {
             SOCKET client_socket = accept(server_socket, nullptr, nullptr);
@@ -314,7 +318,7 @@ int main()
             threads.back().detach();
         }
     }
-    statistics.stop = true;
+    statistics.stop_ = true;
     statistic_displayer.join();
     closesocket(server_socket);
     WSACleanup();
