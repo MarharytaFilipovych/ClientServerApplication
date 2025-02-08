@@ -12,6 +12,7 @@ public class Main {
             String name = scanner.nextLine();
             Client client = new Client(socket);
             client.sendMessage("Hello, server! How are you? This is " + name);
+            System.out.println("Waiting for a server to accept us...");
             client.outputServerResponse();
 
             String userInput = scanner.nextLine();

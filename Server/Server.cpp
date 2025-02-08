@@ -11,7 +11,7 @@
 #include <atomic>
 #pragma comment(lib, "ws2_32.lib")
 #define CHUNK_SIZE 1024
-#define MAX_CLIENTS 2
+#define MAX_CLIENTS 20
 using namespace std;
 using namespace filesystem;
 const path database = ".\\database";
@@ -207,7 +207,7 @@ public:
         if (command == "LIST") List();
         else if (command == "PUT")Put(request.GetPath().filename());
         else {
-            const path p = client_.folder_ / request.GetPath();
+            const path p = client_.folder_ / request.GetPath().filename();
             if (request.ConatinsInvalidPath(p)) {
                 SendResponse("Request denied. Specified file does not exist.");
                 return;
