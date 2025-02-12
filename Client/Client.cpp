@@ -115,7 +115,8 @@ struct Validation {
 		string command;
 		stringstream ss(input);
 		ss >> command;
-		return commands.find(ToUpper(command)) == commands.end() || (input.length()<=command.length()+1 && ToUpper(command) != "LIST"));
+		return commands.find(ToUpper(command)) == commands.end() ||
+			(input.length() <= command.length() + 1 && ToUpper(command) != "LIST");
 	}
 };
 const unordered_set<string> Validation::commands = { "GET", "LIST", "PUT", "INFO", "DELETE", "REMOVE"};
