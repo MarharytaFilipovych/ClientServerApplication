@@ -163,8 +163,7 @@ class ServedClient {
     void GetFileInfo(const path& file)const {
         string size = to_string(file_size(file));
         string time = format("Last modified: {}", last_write_time(file));
-        string path = absolute(file).string();
-        string info = "Size: " + size + " bytes\n" + time + "\nAbsolute path: " + path + "\nPermissions: "+ GetFilePermissions(file);
+        string info = "Size: " + size + " bytes\n" + time + "\nPermissions: "+ GetFilePermissions(file);
         SendResponse(info.c_str());             
     }
 
